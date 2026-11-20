@@ -39,6 +39,22 @@ describe("validateSkill", () => {
     expect(report.grade).toBe("F");
   });
 
+  it("accounts for every rule, listing frontmatter checks that couldn't run", () => {
+    for (const skillMd of ["sss", "---\nname: [unclosed\n---\nbody\n", GOOD]) {
+      const r = validateSkill({ skillMd });
+      const failed = new Set(r.findings.map((f) => f.ruleId));
+      expect(failed.size + r.passed.length + r.skipped.length + r.blocked.length).toBe(RULES.length);
+    }
+    const bare = validateSkill({ skillMd: "sss" });
+    expect(bare.blocked).toEqual(expect.arrayContaining(["name-missing", "description-missing"]));
+    expect(validateSkill({ skillMd: GOOD }).blocked).toEqual([]);
+    expect(reportToMarkdown(bare)).toContain("didn't run because the frontmatter block");
+  });
+
+  it("uses singular words for counts of one", () => {
+    expect(reportToMarkdown(validateSkill({ skillMd: "sss" }))).toContain("Body: 1 line, about 1 token.");
+  });
+
   it("flags invalid YAML", () => {
     expect(ids("---\nname: [unclosed\n---\nbody\n")).toContain("frontmatter-invalid-yaml");
   });

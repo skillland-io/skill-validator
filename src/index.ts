@@ -408,6 +408,8 @@ export function validateSkill(input: SkillInput): Report {
   const failed = new Set(findings.map((f) => f.ruleId));
   const passed = RULES.filter((r) => ran.has(r.id) && !failed.has(r.id)).map((r) => r.id);
   const skipped = RULES.filter((r) => r.needsFolder && !hasFolder).map((r) => r.id);
+  // Rules that read frontmatter fields can't run without a valid frontmatter block.
+  const blocked = RULES.filter((r) => !ran.has(r.id) && !skipped.includes(r.id)).map((r) => r.id);
   const { score, grade } = scoreFindings(findings);
 
   return {
@@ -416,6 +418,7 @@ export function validateSkill(input: SkillInput): Report {
     findings: findings.sort((a, b) => order(a.severity) - order(b.severity) || (a.line ?? 0) - (b.line ?? 0)),
     passed,
     skipped,
+    blocked,
     score,
     grade,
     stats: {
@@ -443,10 +446,15 @@ export function gradeFor(score: number): Grade {
   return GRADE_BANDS.find(([, min]) => score >= min)![0];
 }
 
+/** "1 line", "2 lines". */
+export function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
 export function reportToMarkdown(report: Report, title = report.name ?? "SKILL.md"): string {
   const lines = [`# Skillland report: ${title}`, "", `**Score:** ${report.score}/100 (grade ${report.grade})`, ""];
   lines.push(
-    `Body: ${report.stats.bodyLines} lines, about ${report.stats.bodyTokens} tokens. Description: ${report.stats.descriptionChars} characters.`,
+    `Body: ${plural(report.stats.bodyLines, "line")}, about ${plural(report.stats.bodyTokens, "token")}. Description: ${plural(report.stats.descriptionChars, "character")}.`,
     "",
   );
   if (report.findings.length === 0) lines.push("No findings.");
@@ -462,6 +470,8 @@ export function reportToMarkdown(report: Report, title = report.name ?? "SKILL.m
     }
     lines.push("");
   }
-  lines.push(`${report.passed.length} checks passed. Rules: https://skillland.io/validate/rules`);
+  lines.push(`${plural(report.passed.length, "check")} passed. Rules: https://skillland.io/validate/rules`);
+  if (report.blocked.length) lines.push("", `${plural(report.blocked.length, "check")} didn't run because the frontmatter block is missing or isn't valid YAML.`);
+  if (report.skipped.length) lines.push("", `${plural(report.skipped.length, "folder check")} skipped. Check the whole skill folder to run them.`);
   return lines.join("\n");
 }
