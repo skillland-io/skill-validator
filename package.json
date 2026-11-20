@@ -1,8 +1,16 @@
 {
   "name": "@skillland/validator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lint SKILL.md agent skills against the Agent Skills spec and the official guidance from Anthropic, OpenAI and Cursor. Every rule quotes its source.",
-  "keywords": ["agent-skills", "skill.md", "claude-code", "codex", "cursor", "lint", "validator"],
+  "keywords": [
+    "agent-skills",
+    "skill.md",
+    "claude-code",
+    "codex",
+    "cursor",
+    "lint",
+    "validator"
+  ],
   "homepage": "https://skillland.io/validate/rules",
   "repository": {
     "type": "git",
@@ -23,7 +31,9 @@
   "bin": {
     "skillland": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "engines": {
     "node": ">=20"
@@ -45,5 +55,9 @@
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
