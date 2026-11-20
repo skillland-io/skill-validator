@@ -1,5 +1,13 @@
 # @skillland/validator
 
+[![npm](https://img.shields.io/npm/v/@skillland/validator)](https://www.npmjs.com/package/@skillland/validator)
+[![CI](https://github.com/skillland-io/skill-validator/actions/workflows/ci.yml/badge.svg)](https://github.com/skillland-io/skill-validator/actions/workflows/ci.yml)
+[![npm downloads](https://img.shields.io/npm/dm/@skillland/validator)](https://www.npmjs.com/package/@skillland/validator)
+[![license](https://img.shields.io/npm/l/@skillland/validator)](https://github.com/skillland-io/skill-validator/blob/main/LICENSE)
+[![node](https://img.shields.io/node/v/@skillland/validator)](https://github.com/skillland-io/skill-validator/blob/main/package.json)
+
+![skillland check prints a score, a grade and each finding for a skill](https://raw.githubusercontent.com/skillland-io/skill-validator/main/.github/preview.png)
+
 Lints agent skills (`SKILL.md` folders) for Claude Code, Codex, Cursor and any other agent that follows the [Agent Skills specification](https://agentskills.io/specification).
 
 Every rule quotes, word for word, the sentence of official guidance it relies on: the spec, Anthropic's and Claude Code's docs, OpenAI's and Cursor's docs, and the validation scripts Anthropic and OpenAI ship with their skill creators. Where a rule needs a number the sources leave open, such as a length threshold, the rule says so in `ourCall`.
