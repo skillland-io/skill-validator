@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- `Report.blocked` lists the rules that didn't run because the frontmatter block is missing or isn't valid YAML. With `passed`, `skipped` and the findings, every rule is now accounted for.
+- The Markdown report says how many checks didn't run and how many folder checks were skipped.
+- Singular counts read "1 line", "1 token" and "1 check".
+- New export `plural(n, word)`.
+
 ## 0.1.1
 
 - First release published from GitHub Actions through npm trusted publishing, with provenance.

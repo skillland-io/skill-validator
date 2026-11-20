@@ -68,6 +68,8 @@ export interface Report {
   passed: string[];
   /** Rules skipped because they need the whole folder. */
   skipped: string[];
+  /** Rules that didn't run because the frontmatter block is missing or isn't valid YAML. */
+  blocked: string[];
   score: number;
   grade: Grade;
   stats: ReportStats;
