@@ -32,3 +32,7 @@ A change that can move a score (new rule, removed rule, changed threshold or sev
 ## Quotes going stale
 
 A weekly workflow checks that every quote still appears on its page and opens an issue when one doesn't. Fixing it means updating the quote, or the rule when the guidance itself changed.
+
+## Releasing
+
+Open a PR that raises `version` in package.json (for example `npm version patch --no-git-tag-version`) and adds a CHANGELOG entry. When it merges to main, the Publish workflow sees that the version isn't on npm yet, runs the checks, publishes through npm trusted publishing (no token), and creates the `v<version>` tag and GitHub Release.
