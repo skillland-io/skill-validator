@@ -29,7 +29,7 @@
     }
   },
   "bin": {
-    "skillland": "./dist/cli.js"
+    "skillland": "dist/cli.js"
   },
   "files": [
     "dist"
