@@ -1,6 +1,6 @@
 {
   "name": "@skillland/validator",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Lint SKILL.md agent skills against the Agent Skills spec and the official guidance from Anthropic, OpenAI and Cursor. Every rule quotes its source.",
   "keywords": [
     "agent-skills",
@@ -11,7 +11,7 @@
     "lint",
     "validator"
   ],
-  "homepage": "https://skillland.io/validate/rules",
+  "homepage": "https://skillland.io",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/skillland-io/skill-validator.git"
