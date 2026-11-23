@@ -11,7 +11,7 @@
     "lint",
     "validator"
   ],
-  "homepage": "https://skillland.io/validate/rules",
+  "homepage": "https://skillland.io",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/skillland-io/skill-validator.git"
