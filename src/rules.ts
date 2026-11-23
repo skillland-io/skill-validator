@@ -164,7 +164,7 @@ export const RULES: Rule[] = [
     category: "description",
     summary: "The description should contain a trigger such as `Use when ...`.",
     whyHeading: "Agents match requests against this one line",
-    why: "A description that says what the skill is but not when it applies gets picked less often. This was the most common warning in the 300 skills Skillland scored.",
+    why: "A description that says what the skill is but not when it applies gets picked less often.",
     fixHeading: "End with Use when and the words people type",
     fix: "Name the requests or situations that should load the skill.",
     bad: fm("description: Writes conventional commit messages from staged changes."),

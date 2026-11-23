@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- `description-no-trigger`: the reason no longer claims a count of scored skills ("the 300 skills Skillland scored"), which went stale as the index grew. The site shows the live count next to the rule.
+
 ## 0.2.0
 
 - `Report.blocked` lists the rules that didn't run because the frontmatter block is missing or isn't valid YAML. With `passed`, `skipped` and the findings, every rule is now accounted for.
