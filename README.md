@@ -6,6 +6,8 @@
 [![license](https://img.shields.io/npm/l/@skillland/validator)](https://github.com/skillland-io/skill-validator/blob/main/LICENSE)
 [![node](https://img.shields.io/node/v/@skillland/validator)](https://github.com/skillland-io/skill-validator/blob/main/package.json)
 
+Website: **[skillland.io](https://skillland.io)**. Check a skill in the browser, read every rule with its source, and browse scored public skills.
+
 ![skillland check prints a score, a grade and each finding for a skill](https://raw.githubusercontent.com/skillland-io/skill-validator/main/.github/preview.png)
 
 Lints agent skills (`SKILL.md` folders) for Claude Code, Codex, Cursor and any other agent that follows the [Agent Skills specification](https://agentskills.io/specification).
