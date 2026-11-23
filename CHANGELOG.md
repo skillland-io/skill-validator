@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.1
+## 0.2.2
 
 - `description-no-trigger`: the reason no longer claims a count of scored skills ("the 300 skills Skillland scored"), which went stale as the index grew. The site shows the live count next to the rule.
 
