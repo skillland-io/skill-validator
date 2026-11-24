@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RULES, gradeFor, reportToMarkdown, scoreFindings, validateSkill } from "../src/index";
+import { RULES, gradeFor, reportToMarkdown, scoreAreas, scoreFindings, validateSkill } from "../src/index";
 
 const GOOD = `---
 name: pdf-processing
@@ -197,13 +197,35 @@ describe("validateSkill", () => {
 });
 
 describe("scoring", () => {
-  it("subtracts once per failing rule and caps errors at 59", () => {
+  it("subtracts once per failing rule, with no cap for errors", () => {
     expect(scoreFindings([{ ruleId: "a", severity: "warning" }, { ruleId: "a", severity: "warning" }]).score).toBe(92);
     expect(scoreFindings([{ ruleId: "b", severity: "info" }]).score).toBe(98);
-    expect(scoreFindings([{ ruleId: "c", severity: "error" }]).score).toBe(59);
+    expect(scoreFindings([{ ruleId: "c", severity: "error" }]).score).toBe(75);
     expect(gradeFor(90)).toBe("A");
     expect(gradeFor(89)).toBe("B");
     expect(gradeFor(59)).toBe("F");
+  });
+
+  it("grades each area from its own rules and caps an area with an error", () => {
+    const findings = [
+      { ruleId: "name-matches-folder", severity: "error" as const },
+      { ruleId: "reference-no-toc", severity: "info" as const },
+    ];
+    const passed = RULES.filter((r) => !findings.some((f) => f.ruleId === r.id)).map((r) => r.id);
+    const areas = scoreAreas(findings, passed);
+    expect(areas.map((a) => a.area)).toEqual(["spec", "description", "structure", "security"]);
+    const [spec, description, structure] = areas;
+    expect(spec).toMatchObject({ score: 59, grade: "F", failed: 1 });
+    expect(spec!.total).toBe(RULES.filter((r) => r.category === "spec").length);
+    expect(description).toMatchObject({ score: 100, grade: "A", failed: 0 });
+    expect(structure).toMatchObject({ score: 98, grade: "A", failed: 1 });
+    expect(scoreFindings(findings)).toEqual({ score: 73, grade: "C" });
+  });
+
+  it("puts area grades on every report", () => {
+    const report = validateSkill({ skillMd: GOOD });
+    expect(report.areas).toHaveLength(4);
+    expect(report.areas.reduce((n, a) => n + a.passed, 0)).toBe(report.passed.length);
   });
 
   it("renders a markdown report", () => {
