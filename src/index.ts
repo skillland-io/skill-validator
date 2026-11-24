@@ -18,7 +18,8 @@ export const GRADE_BANDS: [Grade, number][] = [
 
 const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const XML_TAG_RE = /<\/?[a-zA-Z][\w-]*(\s[^>]*)?>/;
-const TRIGGER_RE = /\b(use (it |this |this skill )?(when|whenever|for|to|before|after|if)|used (when|whenever|for|to|before|after|if)|when (the )?(user|users|you|someone|they|asked)|triggers? (on|when|include)|invoke (it )?when)\b/i;
+// Any "when" clause counts, so "WHEN: ...", "Applies when ..." and "Use <name> when ..." pass.
+const TRIGGER_RE = /\b(use (it |this |this skill |only |also )?(when|whenever|for|to|before|after|if)|used (when|whenever|for|to|before|after|if)|when(ever)?|triggers?(:| on| when| include| phrases?)|invoke (it )?when|(load|apply|applies|activate|invoke) (it |this skill )?(when|for|if))\b/i;
 const PERSON_RE = /^\s*(you are|you can|you will|i help|i can|i am|i will|this skill helps you)\b/i;
 const VAGUE_RE = /\b(helps? (you )?with|handles|manages|deals with|assists with|various tasks|tasks or workflows)\b/i;
 const DRIVE_PATH_RE = /(?:^|[\s`"'(])[A-Za-z]:\\[\w.-]/;
@@ -35,7 +36,7 @@ const INTERACTIVE_BY_EXT: [RegExp, RegExp][] = [
 ];
 const SIDE_EFFECT_NAME_RE = /(^|-)(deploy|publish|send|ship|delete|push)(-|$)/;
 const SIDE_EFFECT_DESC_RE = /^\s*(deploys|publishes|sends|ships|deletes|pushes)\b/i;
-const TIME_RE = /\b(as of (20\d\d|january|february|march|april|may|june|july|august|september|october|november|december)|(before|after|since|until) (january|february|march|april|may|june|july|august|september|october|november|december) 20\d\d|the (new|latest) version|recently (added|released)|coming soon)\b/i;
+const TIME_RE = /\b(as of (20\d\d|january|february|march|april|may|june|july|august|september|october|november|december)|(before|after|since|until) (january|february|march|april|may|june|july|august|september|october|november|december) 20\d\d|recently (added|released)|coming soon)\b/i;
 const REMOTE_EXEC_RE = /\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(ba|z|k)?sh\b|\b(iwr|invoke-webrequest|irm|invoke-restmethod)\b[^\n|]*\|\s*(iex|invoke-expression)\b/i;
 const INLINE_EXEC_RE = /(^|\s)!`[^`\n]+`/;
 const SECRET_PATTERNS: [RegExp, string][] = [
@@ -49,9 +50,11 @@ const SECRET_PATTERNS: [RegExp, string][] = [
 ];
 /** Test data folders: a secret-looking value here is usually a fake, so it is a warning, not an error. */
 const FIXTURE_DIR_RE = /(^|\/)(evals?|fixtures?|__fixtures__|test-?data|testdata|__testdata__)\//i;
+/** Bundled files the agent copies or fills in rather than reads for guidance. */
+const NOT_REFERENCE_RE = /(^|\/)(assets|templates?)\/|template/i;
 const QUOTED_CREDENTIAL_RE = /\b(password|passwd|secret|api[_-]?key|access[_-]?key|auth[_-]?token|token)\b["']?\s*[:=]\s*["']([^"'\s]{10,})["']/i;
 const ENV_CREDENTIAL_RE = /^\s*(?:export\s+)?[A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|API_KEY)\s*=\s*([^\s"'$]{12,})\s*$/;
-const PLACEHOLDER_VALUE_RE = /x{3,}|\*{3,}|your|example|sample|dummy|placeholder|changeme|redacted|test|fake|demo|my-|<|>|\$|\{|\(|token|secret|password|key|env|\.\.\./i;
+const PLACEHOLDER_VALUE_RE = /x{3,}|\*{3,}|your|example|sample|dummy|placeholder|changeme|redacted|test|fake|demo|my-|<|>|\$|\{|\(|token|secret|pass|key|env|\.\.\.|0123|1234|2345|3456|4567|5678|6789/i;
 
 /** Literal-looking secret on this line: a known key format, or a quoted or env value with letters and digits. */
 function secretIn(line: string): string | undefined {
@@ -127,7 +130,7 @@ const stripCode =(md: string) => md.replace(/^\s*(```|~~~)[\s\S]*?^\s*\1.*$/gm, 
 const localLinks = (md: string) =>
   [...stripCode(md).matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)]
     .map((m) => m[1]!)
-    .filter((href) => !/^([a-z][a-z0-9+.-]*:|#|\/\/)/i.test(href))
+    .filter((href) => !/^([a-z][a-z0-9+.-]*:|#|\/)/i.test(href))
     .map((href) => href.split("#")[0]!.replace(/^\.\//, ""))
     .filter(Boolean);
 
@@ -210,7 +213,8 @@ export function validateSkill(input: SkillInput): Report {
         if (m) add("description-person", `Description starts with "${m[0].trim()}"`, fmLine("description"));
       });
       run("description-vague", () => {
-        const m = VAGUE_RE.exec(description);
+        // A vague verb only counts when the description also lacks a trigger and is short; longer ones name their tools.
+        const m = !TRIGGER_RE.test(description) && description.length < 150 ? VAGUE_RE.exec(description) : null;
         if (description.toLowerCase() === name.toLowerCase() || description.toLowerCase() === name.replace(/-/g, " ")) {
           add("description-vague", "Description only repeats the name", fmLine("description"));
         } else if (m) {
@@ -282,7 +286,10 @@ export function validateSkill(input: SkillInput): Report {
       if (bodyTokens > 5000) add("body-too-many-tokens", `Body is about ${bodyTokens.toLocaleString("en-US")} tokens, over about 5,000`);
     });
     run("long-body-no-references", () => {
-      if (bodyLines > 250 && links.length === 0) add("long-body-no-references", `Body is ${bodyLines} lines and links no reference files`);
+      // A Markdown link, a path into a bundled folder, or the name of a bundled file all count as pointing to one.
+      const bundled = Object.keys(input.files ?? {}).filter((f) => /\.\w+$/.test(f));
+      const mentions = /(^|[\s`"'(])(references|scripts|assets|docs|examples|templates|reference|rules)\/[\w./-]+\.\w+/.test(body) || bundled.some((f) => body.includes(f));
+      if (bodyLines > 250 && links.length === 0 && !mentions) add("long-body-no-references", `Body is ${bodyLines} lines and links no reference files`);
     });
     run("no-steps", () => {
       const hasSteps = prose.some((r) => /^\s*\d+[.)]\s/.test(r.text) || /^#{1,6}\s.*\b(step|steps|workflow|procedure|how to)\b/i.test(r.text));
@@ -372,7 +379,7 @@ export function validateSkill(input: SkillInput): Report {
     });
     run("reference-no-toc", () => {
       for (const [path, text] of Object.entries(files)) {
-        if (!/\.md$/i.test(path)) continue;
+        if (!/\.md$/i.test(path) || NOT_REFERENCE_RE.test(path) || FIXTURE_DIR_RE.test(path)) continue;
         const lines = text.split("\n");
         if (lines.length <= 100) continue;
         const head = lines.slice(0, 40);
@@ -395,7 +402,8 @@ export function validateSkill(input: SkillInput): Report {
     run("interactive-script", () => {
       for (const [path, text] of Object.entries(files)) {
         const re = INTERACTIVE_BY_EXT.find(([ext]) => ext.test(path))?.[1];
-        if (!re) continue;
+        // Templates are copied and edited for a person to run, often on purpose interactive.
+        if (!re || /template/i.test(path)) continue;
         const at = text.split("\n").findIndex((l) => !/^\s*(#|\/\/)/.test(l) && re.test(l));
         if (at !== -1) {
           add("interactive-script", `\`${path}\` line ${at + 1} waits for typed input`);

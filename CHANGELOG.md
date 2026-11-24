@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.3
+
+Fewer false positives, found by reviewing every finding in the Skillland index. Scores can go up; no rule got stricter.
+
+- `description-no-trigger` and `description-trigger-late`: any "when" clause now counts as a trigger, plus `Trigger:`, `Use only when`, `Also load it when` and `Applies when`. Descriptions written as `WHEN: ...` no longer fail.
+- `description-vague`: flags a vague verb only in a description under 150 characters that also has no trigger. Specific descriptions that say "manages" or "handles" pass.
+- `long-body-no-references`: a plain path such as `references/api.md`, or the name of a bundled file, counts as pointing to a reference file, not only a Markdown link.
+- `time-sensitive`: "the new version" and "the latest version" are no longer flagged; they don't go out of date.
+- `hardcoded-secret` and `fixture-secret`: values with counting digits (`1234`, `4567`) or "pass" in them are treated as samples.
+- `broken-links`: site-absolute links such as `/features/analytics` are not treated as file links.
+- `reference-no-toc`: skips files under `assets/` or `templates/` and template files.
+- `interactive-script`: skips template scripts, which a person copies and runs.
+- Rule texts: `frontmatter-invalid-yaml` says the Cursor warning is in Cloud Agents; `description-missing` notes Claude Code's fallback to the first body line; `broad-allowed-tools` says Claude Code's grant lasts for the invoking turn.
+
 ## 0.2.2
 
 - `description-no-trigger`: the reason no longer claims a count of scored skills ("the 300 skills Skillland scored"), which went stale as the index grew. The site shows the live count next to the rule.

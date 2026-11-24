@@ -80,11 +80,31 @@ describe("validateSkill", () => {
     expect(ids(GOOD.replace(/description: .*/, "description: You are a PDF expert. Use when the user mentions PDF files or forms."))).toContain(
       "description-person",
     );
-    expect(ids(GOOD.replace(/description: .*/, "description: Helps with documents. Use when working with PDF tasks or workflows."))).toContain(
+    expect(ids(GOOD.replace(/description: .*/, "description: Helps with documents, files and other PDF tasks or workflows."))).toContain(
+      "description-vague",
+    );
+    // A specific description with a trigger can use "manages" without being vague.
+    expect(ids(GOOD.replace(/description: .*/, "description: Manages Firebase Remote Config templates and feature flags. Use when deploying remote config."))).not.toContain(
       "description-vague",
     );
     expect(ids(GOOD.replace(/description: .*/, "description: PDF stuff."))).toContain("description-too-short");
     expect(ids(GOOD.replace(/description: .*/, "description: Uses <example> tags. Use when the user needs PDF help with forms."))).toContain("xml-tags");
+  });
+
+  it("accepts the common ways of saying when to use a skill", () => {
+    for (const d of [
+      "Lists Azure resources across subscriptions. WHEN: list my resources, find a web app.",
+      "Shows the caveman reference card for the three skills. Trigger: /caveman-help or caveman help.",
+      "Guidance for intentional visual design when building new UI or reshaping one.",
+      "Writes and checks Postgres queries for speed and safety. Also load it when diagnosing slow queries.",
+    ]) {
+      expect(ids(GOOD.replace(/description: .*/, `description: ${d}`))).not.toContain("description-no-trigger");
+    }
+  });
+
+  it("counts a bundled file named by path as a reference", () => {
+    const head = `---\nname: big\ndescription: Builds large things from many parts and checks them. Use when the user asks for a big build.\n---\n`;
+    expect(ids(`${head}${"plain line\n".repeat(300)}Read \`references/api.md\` for the fields.\n`)).not.toContain("long-body-no-references");
   });
 
   it("checks body length and structure", () => {
@@ -100,6 +120,10 @@ describe("validateSkill", () => {
     const byId = Object.fromEntries(report.findings.map((f) => [f.ruleId, f]));
     expect(byId["windows-paths"]?.line).toBe(21);
     expect(byId["time-sensitive"]?.line).toBe(22);
+  });
+
+  it("doesn't call evergreen version wording dated", () => {
+    expect(ids(`${GOOD}\nUse npx so you always run the latest version of the CLI.\n`)).not.toContain("time-sensitive");
   });
 
   it("allows Windows drive paths inside code blocks only", () => {
@@ -161,6 +185,9 @@ describe("validateSkill", () => {
     expect(ids(GOOD, { files: { ...forms, "scripts/setup.sh": "while read -r line; do echo $line; done\n" } })).not.toContain("interactive-script");
     expect(ids(GOOD, { files: { ...forms, "scripts/setup.sh": 'read -r -p "Continue? " ok\n' } })).toContain("interactive-script");
     expect(ids(GOOD, { files: { ...forms, "scripts/a.py": '"""Uses: input (system+user messages)."""\n' } })).not.toContain("interactive-script");
+    expect(ids(GOOD, { files: { ...forms, "scripts/hitl.template.sh": 'read -r -p "Enter when done " _\n' } })).not.toContain("interactive-script");
+    expect(ids(GOOD, { files: { ...forms, "assets/presets/FRAME.md": "line\n".repeat(120) } })).not.toContain("reference-no-toc");
+    expect(ids(`${GOOD}\nSee [analytics](/features/analytics).\n`, { files: forms })).not.toContain("broken-links");
   });
 
   it("skips folder rules in paste mode", () => {
@@ -195,6 +222,12 @@ describe("scoring", () => {
 });
 
 describe("false-positive guards", () => {
+  it("ignores sample values with counting digits or pass in them", () => {
+    expect(ids(`${GOOD}\nAppCheck debug token: "123a4567-b89c-12d3-e456-789012345678"\n`)).not.toContain("hardcoded-secret");
+    expect(ids(`${GOOD}\npassword: 'SecurePass456!'\n`)).not.toContain("hardcoded-secret");
+    expect(ids(`${GOOD}\npassword: "q8Zr2vLk9wTm"\n`)).toContain("hardcoded-secret");
+  });
+
   it("ignores env lookups and placeholders as secrets", () => {
     const base = GOOD.replace("](references/forms.md)", "](https://example.com)");
     for (const line of ['api_key=os.environ["KEY"]', 'token = credential.get_token()', 'password: process.env.DB_PASSWORD', 'token="whiteboard_token_xxx"', "API_KEY=my-api-key"]) {
