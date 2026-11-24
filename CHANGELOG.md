@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+Scoring change: scores in the Skillland index move when the site updates to this version.
+
+- An error no longer caps the overall score at 59. One error on its own now gives 75 (C) instead of an F.
+- `Report.areas` grades each area (Specification, Description, Structure and content, Security) from its own rules. An error caps its area at 59, so the area with the problem shows F.
+- The overall score is still capped at 59 when the frontmatter block is missing or isn't valid YAML, because no agent can load that skill.
+- New exports `AREAS`, `scoreAreas(findings, passed)` and the `AreaScore` type. `ERROR_CAP` now applies to areas.
+- The Markdown report starts with a table of area grades.
+
 ## 0.2.2
 
 - `description-no-trigger`: the reason no longer claims a count of scored skills ("the 300 skills Skillland scored"), which went stale as the index grew. The site shows the live count next to the rule.

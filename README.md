@@ -54,6 +54,7 @@ const report = validateSkill({
 
 report.score; // 0-100
 report.grade; // "A" to "F"
+report.areas; // [{ area: "spec", label: "Specification", score, grade, passed, failed, total }, ...]
 report.findings; // [{ ruleId, severity, message, fix, line }]
 ```
 
@@ -63,7 +64,11 @@ It has one dependency, [`yaml`](https://www.npmjs.com/package/yaml), and runs in
 
 ## Scoring
 
-A skill starts at 100. Each failing rule costs 25 points for an error, 8 for a warning and 2 for a suggestion, once per rule however often it fails. Any error caps the score at 59. Grades: A from 90, B from 80, C from 70, D from 60, F below.
+A skill starts at 100. Each failing rule costs 25 points for an error, 8 for a warning and 2 for a suggestion, once per rule however often it fails. Grades: A from 90, B from 80, C from 70, D from 60, F below. One error on its own gives 75, a C.
+
+Each of the four areas (Specification, Description, Structure and content, Security) also gets a grade, worked out the same way from that area's rules only. An error caps its own area at 59, so the area that has the problem shows F.
+
+The one cap on the overall score: when the frontmatter block is missing or isn't valid YAML, no agent can load the skill and most checks can't run, so the score is capped at 59 (F).
 
 The formula is Skillland's own; no vendor publishes one. It may change between minor versions, which the [changelog](CHANGELOG.md) will say.
 

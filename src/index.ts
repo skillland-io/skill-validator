@@ -1,13 +1,24 @@
 import { parse as parseYaml } from "yaml";
-import { RULES, getRule } from "./rules";
-import type { Finding, Grade, Report, SkillInput } from "./types";
+import { RULES, RULES_BY_ID, getRule } from "./rules";
+import type { AreaScore, Finding, Grade, Report, RuleCategory, SkillInput } from "./types";
 
 export * from "./types";
 export { RULES, RULES_BY_ID, getRule } from "./rules";
 export { S as SOURCES } from "./sources";
 
 export const PENALTY = { error: 25, warning: 8, info: 2 } as const;
+/**
+ * An error caps the score of its own area at this, so that area shows F. The overall score is
+ * capped only when the frontmatter block is missing or isn't valid YAML, since no agent can load that skill.
+ */
 export const ERROR_CAP = 59;
+/** The four areas the rules fall into, in display order. Each area gets its own grade. */
+export const AREAS: { id: RuleCategory; label: string; summary: string }[] = [
+  { id: "spec", label: "Specification", summary: "Fields and format the Agent Skills specification requires" },
+  { id: "description", label: "Description", summary: "Whether an agent can tell when to use the skill" },
+  { id: "structure", label: "Structure and content", summary: "How the body and the bundled files are laid out" },
+  { id: "security", label: "Security", summary: "Secrets, shell commands and side effects" },
+];
 export const GRADE_BANDS: [Grade, number][] = [
   ["A", 90],
   ["B", 80],
@@ -410,7 +421,8 @@ export function validateSkill(input: SkillInput): Report {
   const skipped = RULES.filter((r) => r.needsFolder && !hasFolder).map((r) => r.id);
   // Rules that read frontmatter fields can't run without a valid frontmatter block.
   const blocked = RULES.filter((r) => !ran.has(r.id) && !skipped.includes(r.id)).map((r) => r.id);
-  const { score, grade } = scoreFindings(findings);
+  // Without a readable frontmatter block no agent can load the skill, so it can't pass.
+  const { score, grade } = blocked.length ? penaltyScore(findings, true) : scoreFindings(findings);
 
   return {
     name: name || undefined,
@@ -421,6 +433,7 @@ export function validateSkill(input: SkillInput): Report {
     blocked,
     score,
     grade,
+    areas: scoreAreas(findings, passed),
     stats: {
       bodyLines,
       bodyTokens,
@@ -433,11 +446,30 @@ export function validateSkill(input: SkillInput): Report {
 
 const order = (s: Finding["severity"]) => (s === "error" ? 0 : s === "warning" ? 1 : 2);
 
+/** Overall score: 100 minus a penalty for each failing rule, counted once per rule. */
 export function scoreFindings(findings: Pick<Finding, "ruleId" | "severity">[]): { score: number; grade: Grade } {
+  return penaltyScore(findings, false);
+}
+
+/**
+ * A grade for each area, from that area's rules only. An error caps its area at {@link ERROR_CAP}.
+ * `passed` lists the rule ids that ran and found nothing; rules that didn't run don't count.
+ */
+export function scoreAreas(findings: Pick<Finding, "ruleId" | "severity">[], passed: string[]): AreaScore[] {
+  const areaOf = (id: string) => RULES_BY_ID[id]?.category;
+  return AREAS.map(({ id, label }) => {
+    const own = findings.filter((f) => areaOf(f.ruleId) === id);
+    const failed = new Set(own.map((f) => f.ruleId)).size;
+    const passedHere = passed.filter((r) => areaOf(r) === id).length;
+    return { area: id, label, ...penaltyScore(own, true), passed: passedHere, failed, total: passedHere + failed };
+  });
+}
+
+function penaltyScore(findings: Pick<Finding, "ruleId" | "severity">[], capErrors: boolean): { score: number; grade: Grade } {
   const failedRules = new Map(findings.map((f) => [f.ruleId, f.severity]));
   let score = 100;
   for (const severity of failedRules.values()) score -= PENALTY[severity];
-  if ([...failedRules.values()].includes("error")) score = Math.min(score, ERROR_CAP);
+  if (capErrors && [...failedRules.values()].includes("error")) score = Math.min(score, ERROR_CAP);
   score = Math.max(0, score);
   return { score, grade: gradeFor(score) };
 }
@@ -453,6 +485,12 @@ export function plural(n: number, word: string): string {
 
 export function reportToMarkdown(report: Report, title = report.name ?? "SKILL.md"): string {
   const lines = [`# Skillland report: ${title}`, "", `**Score:** ${report.score}/100 (grade ${report.grade})`, ""];
+  lines.push(
+    "| Area | Grade | Checks passed |",
+    "| --- | --- | --- |",
+    ...report.areas.map((a) => `| ${a.label} | ${a.total ? `${a.grade} (${a.score})` : "not checked"} | ${a.passed} of ${a.total} |`),
+    "",
+  );
   lines.push(
     `Body: ${plural(report.stats.bodyLines, "line")}, about ${plural(report.stats.bodyTokens, "token")}. Description: ${plural(report.stats.descriptionChars, "character")}.`,
     "",

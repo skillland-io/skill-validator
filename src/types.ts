@@ -60,6 +60,20 @@ export interface ReportStats {
 
 export type Grade = "A" | "B" | "C" | "D" | "F";
 
+export interface AreaScore {
+  area: RuleCategory;
+  label: string;
+  /** 0-100 from this area's rules only; an error caps it at 59. */
+  score: number;
+  grade: Grade;
+  /** Rules in this area that ran and found nothing. */
+  passed: number;
+  /** Rules in this area with at least one finding. */
+  failed: number;
+  /** passed + failed: the rules in this area that ran. 0 means the area wasn't checked. */
+  total: number;
+}
+
 export interface Report {
   name?: string;
   description?: string;
@@ -70,7 +84,10 @@ export interface Report {
   skipped: string[];
   /** Rules that didn't run because the frontmatter block is missing or isn't valid YAML. */
   blocked: string[];
+  /** 0-100 overall: 100 minus a penalty per failing rule. */
   score: number;
   grade: Grade;
+  /** A grade for each of the four areas, in display order. */
+  areas: AreaScore[];
   stats: ReportStats;
 }
