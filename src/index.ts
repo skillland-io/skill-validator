@@ -156,6 +156,9 @@ export function validateSkill(input: SkillInput): Report {
     ran.add(ruleId);
     check();
   };
+  // Rules whose subject isn't there, such as step checks on a three-line body. Neither passed nor failed.
+  const notApplicable = new Set<string>();
+  const na = (...ruleIds: string[]) => ruleIds.forEach((id) => notApplicable.add(id));
 
   const parsed = parseSkill(input.skillMd);
   const fm = parsed.frontmatter;
@@ -281,6 +284,8 @@ export function validateSkill(input: SkillInput): Report {
   const bodyTrim = body.trim();
   const bodyLines = bodyTrim ? bodyTrim.split("\n").length : 0;
   const bodyTokens = tokens(bodyTrim);
+  // Words with a letter or digit, so Markdown markers such as "#" or "---" don't count.
+  const bodyWords = bodyTrim.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
   const rows = proseLines(body, parsed.bodyStartLine);
   const prose = rows.filter((r) => !r.inFence);
   const firstMatch = (re: RegExp, set = prose) => set.find((r) => re.test(r.text.replace(/`[^`\n]*`/g, "")));
@@ -288,28 +293,39 @@ export function validateSkill(input: SkillInput): Report {
 
   run("body-empty", () => {
     if (!bodyTrim) add("body-empty", getRule("body-empty").problem, parsed.bodyStartLine);
+    else if (bodyWords < 3) add("body-empty", `Body has only ${plural(bodyWords, "word")}, no instructions`, parsed.bodyStartLine);
   });
-  if (bodyTrim) {
+  if (!bodyTrim) {
+    na("body-too-long", "body-too-many-tokens", "long-body-no-references", "no-steps", "no-examples", "shouty-directives", "windows-paths", "time-sensitive", "remote-exec", "shell-injection");
+  } else {
     run("body-too-long", () => {
       if (bodyLines > 500) add("body-too-long", `Body is ${bodyLines} lines, over the 500-line limit`);
     });
     run("body-too-many-tokens", () => {
       if (bodyTokens > 5000) add("body-too-many-tokens", `Body is about ${bodyTokens.toLocaleString("en-US")} tokens, over about 5,000`);
     });
-    run("long-body-no-references", () => {
-      // A Markdown link, a path into a bundled folder, or the name of a bundled file all count as pointing to one.
-      const bundled = Object.keys(input.files ?? {}).filter((f) => /\.\w+$/.test(f));
-      const mentions = /(^|[\s`"'(])(references|scripts|assets|docs|examples|templates|reference|rules)\/[\w./-]+\.\w+/.test(body) || bundled.some((f) => body.includes(f));
-      if (bodyLines > 250 && links.length === 0 && !mentions) add("long-body-no-references", `Body is ${bodyLines} lines and links no reference files`);
-    });
-    run("no-steps", () => {
-      const hasSteps = prose.some((r) => /^\s*\d+[.)]\s/.test(r.text) || /^#{1,6}\s.*\b(step|steps|workflow|procedure|how to)\b/i.test(r.text));
-      if (bodyLines > 15 && !hasSteps) add("no-steps", getRule("no-steps").problem);
-    });
-    run("no-examples", () => {
-      const hasExample = rows.some((r) => /^\s*(```|~~~)/.test(r.text)) || prose.some((r) => /^#{1,6}\s.*\bexamples?\b/i.test(r.text));
-      if (bodyLines > 15 && !hasExample) add("no-examples", getRule("no-examples").problem);
-    });
+    if (bodyLines <= 250) {
+      na("long-body-no-references");
+    } else {
+      run("long-body-no-references", () => {        // A Markdown link, a path into a bundled folder, or the name of a bundled file all count as pointing to one.
+        const bundled = Object.keys(input.files ?? {}).filter((f) => /\.\w+$/.test(f));
+        const mentions = /(^|[\s`"'(])(references|scripts|assets|docs|examples|templates|reference|rules)\/[\w./-]+\.\w+/.test(body) || bundled.some((f) => body.includes(f));
+        if (links.length === 0 && !mentions) add("long-body-no-references", `Body is ${bodyLines} lines and links no reference files`);
+      });
+    }
+    // Short bodies are often one-line hand-offs to another skill; steps and examples are only recommended.
+    if (bodyLines <= 15) {
+      na("no-steps", "no-examples");
+    } else {
+      run("no-steps", () => {
+        const hasSteps = prose.some((r) => /^\s*\d+[.)]\s/.test(r.text) || /^#{1,6}\s.*\b(step|steps|workflow|procedure|how to)\b/i.test(r.text));
+        if (!hasSteps) add("no-steps", getRule("no-steps").problem);
+      });
+      run("no-examples", () => {
+        const hasExample = rows.some((r) => /^\s*(```|~~~)/.test(r.text)) || prose.some((r) => /^#{1,6}\s.*\bexamples?\b/i.test(r.text));
+        if (!hasExample) add("no-examples", getRule("no-examples").problem);
+      });
+    }
     run("shouty-directives", () => {
       const count = prose.reduce((n, r) => n + (r.text.replace(/`[^`\n]*`/g, "").match(SHOUT_RE)?.length ?? 0), 0);
       if (count >= 5) add("shouty-directives", `Body shouts MUST, NEVER or ALWAYS ${count} times`);
@@ -427,10 +443,15 @@ export function validateSkill(input: SkillInput): Report {
   const failed = new Set(findings.map((f) => f.ruleId));
   const passed = RULES.filter((r) => ran.has(r.id) && !failed.has(r.id)).map((r) => r.id);
   const skipped = RULES.filter((r) => r.needsFolder && !hasFolder).map((r) => r.id);
-  // Rules that read frontmatter fields can't run without a valid frontmatter block.
-  const blocked = RULES.filter((r) => !ran.has(r.id) && !skipped.includes(r.id)).map((r) => r.id);
-  // Without a readable frontmatter block no agent can load the skill, so it can't pass.
-  const { score, grade } = blocked.length ? penaltyScore(findings, true) : scoreFindings(findings);
+  const left = RULES.filter((r) => !ran.has(r.id) && !skipped.includes(r.id) && !notApplicable.has(r.id)).map((r) => r.id);
+  // Without a readable frontmatter block the rules that read its fields can't run, and no agent can load
+  // the skill, so it can't pass. Otherwise a rule that didn't run had nothing to check, such as
+  // `description-no-trigger` with no description or `name-matches-folder` with no folder name.
+  const frontmatterBroken = !fm || parsed.yamlError !== undefined;
+  const blocked = frontmatterBroken ? left : [];
+  if (!frontmatterBroken) na(...left);
+  const notApplicableIds = RULES.filter((r) => notApplicable.has(r.id)).map((r) => r.id);
+  const { score, grade } = frontmatterBroken ? penaltyScore(findings, true) : scoreFindings(findings);
 
   return {
     name: name || undefined,
@@ -439,9 +460,10 @@ export function validateSkill(input: SkillInput): Report {
     passed,
     skipped,
     blocked,
+    notApplicable: notApplicableIds,
     score,
     grade,
-    areas: scoreAreas(findings, passed),
+    areas: scoreAreas(findings, passed, { notApplicable: notApplicableIds, frontmatterBroken }),
     stats: {
       bodyLines,
       bodyTokens,
@@ -462,14 +484,29 @@ export function scoreFindings(findings: Pick<Finding, "ruleId" | "severity">[]):
 /**
  * A grade for each area, from that area's rules only. An error caps its area at {@link ERROR_CAP}.
  * `passed` lists the rule ids that ran and found nothing; rules that didn't run don't count.
+ * With `frontmatterBroken`, only Specification is graded: the other areas would grade a file no agent can load.
  */
-export function scoreAreas(findings: Pick<Finding, "ruleId" | "severity">[], passed: string[]): AreaScore[] {
+export function scoreAreas(
+  findings: Pick<Finding, "ruleId" | "severity">[],
+  passed: string[],
+  { notApplicable = [], frontmatterBroken = false }: { notApplicable?: string[]; frontmatterBroken?: boolean } = {},
+): AreaScore[] {
   const areaOf = (id: string) => RULES_BY_ID[id]?.category;
   return AREAS.map(({ id, label }) => {
     const own = findings.filter((f) => areaOf(f.ruleId) === id);
     const failed = new Set(own.map((f) => f.ruleId)).size;
     const passedHere = passed.filter((r) => areaOf(r) === id).length;
-    return { area: id, label, ...penaltyScore(own, true), passed: passedHere, failed, total: passedHere + failed };
+    const total = passedHere + failed;
+    return {
+      area: id,
+      label,
+      ...penaltyScore(own, true),
+      graded: total > 0 && (!frontmatterBroken || id === "spec"),
+      passed: passedHere,
+      failed,
+      total,
+      notApplicable: notApplicable.filter((r) => areaOf(r) === id).length,
+    };
   });
 }
 
@@ -496,7 +533,7 @@ export function reportToMarkdown(report: Report, title = report.name ?? "SKILL.m
   lines.push(
     "| Area | Grade | Checks passed |",
     "| --- | --- | --- |",
-    ...report.areas.map((a) => `| ${a.label} | ${a.total ? `${a.grade} (${a.score})` : "not checked"} | ${a.passed} of ${a.total} |`),
+    ...report.areas.map((a) => `| ${a.label} | ${a.graded ? `${a.grade} (${a.score})` : a.total ? "not graded" : "not checked"} | ${a.passed} of ${a.total} |`),
     "",
   );
   lines.push(
@@ -517,7 +554,10 @@ export function reportToMarkdown(report: Report, title = report.name ?? "SKILL.m
     lines.push("");
   }
   lines.push(`${plural(report.passed.length, "check")} passed. Rules: https://skillland.io/validate/rules`);
-  if (report.blocked.length) lines.push("", `${plural(report.blocked.length, "check")} didn't run because the frontmatter block is missing or isn't valid YAML.`);
+  if (report.blocked.length) {
+    lines.push("", `${plural(report.blocked.length, "check")} didn't run because the frontmatter block is missing or isn't valid YAML. Only Specification is graded until it is fixed.`);
+  }
+  if (report.notApplicable.length) lines.push("", `${plural(report.notApplicable.length, "check")} didn't apply, such as step checks on a short body.`);
   if (report.skipped.length) lines.push("", `${plural(report.skipped.length, "folder check")} skipped. Check the whole skill folder to run them.`);
   return lines.join("\n");
 }

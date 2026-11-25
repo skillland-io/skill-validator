@@ -40,10 +40,10 @@ describe("validateSkill", () => {
   });
 
   it("accounts for every rule, listing frontmatter checks that couldn't run", () => {
-    for (const skillMd of ["sss", "---\nname: [unclosed\n---\nbody\n", GOOD]) {
+    for (const skillMd of ["sss", "---\nname: [unclosed\n---\nbody\n", "---\nname: x\ndescription: y\n---\n", GOOD]) {
       const r = validateSkill({ skillMd });
       const failed = new Set(r.findings.map((f) => f.ruleId));
-      expect(failed.size + r.passed.length + r.skipped.length + r.blocked.length).toBe(RULES.length);
+      expect(failed.size + r.passed.length + r.skipped.length + r.blocked.length + r.notApplicable.length).toBe(RULES.length);
     }
     const bare = validateSkill({ skillMd: "sss" });
     expect(bare.blocked).toEqual(expect.arrayContaining(["name-missing", "description-missing"]));
@@ -220,6 +220,45 @@ describe("scoring", () => {
     expect(description).toMatchObject({ score: 100, grade: "A", failed: 0 });
     expect(structure).toMatchObject({ score: 98, grade: "A", failed: 1 });
     expect(scoreFindings(findings)).toEqual({ score: 73, grade: "C" });
+  });
+
+  it("grades only Specification when the frontmatter is missing or broken", () => {
+    for (const skillMd of ["sssssss", "---\nname: [unclosed\n---\nSome real instructions for the agent here.\n"]) {
+      const areas = validateSkill({ skillMd }).areas;
+      expect(areas.find((a) => a.area === "spec")).toMatchObject({ graded: true, grade: "F" });
+      expect(areas.filter((a) => a.area !== "spec").every((a) => !a.graded)).toBe(true);
+    }
+    const md = reportToMarkdown(validateSkill({ skillMd: "sssssss" }));
+    expect(md).toContain("| Structure and content | not graded |");
+    expect(validateSkill({ skillMd: GOOD }).areas.every((a) => a.graded)).toBe(true);
+  });
+
+  it("fails a near-empty body as an error, so it can't score A", () => {
+    const head = "---\nname: csv-cleaner\ndescription: Cleans CSV exports. Use when the user asks to tidy a CSV file from Excel.\n---\n";
+    for (const body of ["", "sss", "# Title\n\nTodo"]) {
+      const r = validateSkill({ skillMd: head + body });
+      expect(r.findings.map((f) => f.ruleId)).toEqual(["body-empty"]);
+      expect(r.findings[0]!.severity).toBe("error");
+      expect(r.grade).toBe("C");
+      expect(r.areas.find((a) => a.area === "structure")!.grade).toBe("F");
+    }
+    expect(validateSkill({ skillMd: `${head}sss` }).findings[0]!.message).toBe("Body has only 1 word, no instructions");
+    // A one-line hand-off to another skill is a real skill.
+    expect(validateSkill({ skillMd: `${head}Call the Skill tool with "grilling".` }).findings).toEqual([]);
+  });
+
+  it("lists checks with nothing to look at as not applicable, not passed", () => {
+    const head = "---\nname: csv-cleaner\ndescription: Cleans CSV exports. Use when the user asks to tidy a CSV file from Excel.\n---\n";
+    const short = validateSkill({ skillMd: `${head}Run the cleaner script on the file the user names.` });
+    expect(short.notApplicable).toEqual(expect.arrayContaining(["no-steps", "no-examples", "long-body-no-references"]));
+    expect(short.passed).not.toContain("no-steps");
+    const structure = short.areas.find((a) => a.area === "structure")!;
+    expect(structure.notApplicable).toBe(3);
+    expect(structure.total).toBe(structure.passed + structure.failed);
+    const empty = validateSkill({ skillMd: head });
+    expect(empty.notApplicable).toEqual(expect.arrayContaining(["body-too-long", "remote-exec"]));
+    expect(empty.blocked).toEqual([]);
+    expect(validateSkill({ skillMd: GOOD }).notApplicable).not.toContain("body-too-long");
   });
 
   it("puts area grades on every report", () => {

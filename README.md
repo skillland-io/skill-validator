@@ -54,7 +54,7 @@ const report = validateSkill({
 
 report.score; // 0-100
 report.grade; // "A" to "F"
-report.areas; // [{ area: "spec", label: "Specification", score, grade, passed, failed, total }, ...]
+report.areas; // [{ area: "spec", label: "Specification", score, grade, graded, passed, failed, total, notApplicable }, ...]
 report.findings; // [{ ruleId, severity, message, fix, line }]
 ```
 
@@ -68,7 +68,9 @@ A skill starts at 100. Each failing rule costs 25 points for an error, 8 for a w
 
 Each of the four areas (Specification, Description, Structure and content, Security) also gets a grade, worked out the same way from that area's rules only. An error caps its own area at 59, so the area that has the problem shows F.
 
-The one cap on the overall score: when the frontmatter block is missing or isn't valid YAML, no agent can load the skill and most checks can't run, so the score is capped at 59 (F).
+The one cap on the overall score: when the frontmatter block is missing or isn't valid YAML, no agent can load the skill and most checks can't run, so the score is capped at 59 (F). Only Specification is graded then; the other areas have `graded: false` and their findings are still listed.
+
+A check with nothing to look at neither passes nor fails. It goes in `report.notApplicable`: the step and example checks on a body of 15 lines or fewer, the body checks on an empty body, the description checks with no description. Every rule is in exactly one of the findings, `passed`, `notApplicable`, `skipped` (needs the folder) or `blocked` (needs readable frontmatter).
 
 The formula is Skillland's own; no vendor publishes one. It may change between minor versions, which the [changelog](CHANGELOG.md) will say.
 

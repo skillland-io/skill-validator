@@ -72,6 +72,13 @@ export interface AreaScore {
   failed: number;
   /** passed + failed: the rules in this area that ran. 0 means the area wasn't checked. */
   total: number;
+  /** Rules in this area that had nothing to check, such as step checks on a short body. Not in total. */
+  notApplicable: number;
+  /**
+   * False when the area has no checks that ran, or when the frontmatter block is missing or isn't valid
+   * YAML (then only Specification is graded). Show "not graded" or "not checked" instead of the letter.
+   */
+  graded: boolean;
 }
 
 export interface Report {
@@ -84,6 +91,11 @@ export interface Report {
   skipped: string[];
   /** Rules that didn't run because the frontmatter block is missing or isn't valid YAML. */
   blocked: string[];
+  /**
+   * Rules that had nothing to check, so they neither passed nor failed: step and example checks on a body
+   * of 15 lines or fewer, body checks on an empty body, description checks with no description.
+   */
+  notApplicable: string[];
   /** 0-100 overall: 100 minus a penalty per failing rule. */
   score: number;
   grade: Grade;
