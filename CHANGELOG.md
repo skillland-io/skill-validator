@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+Scoring change: a near-empty skill can no longer score A. Scores in the Skillland index move when the site updates to this version.
+
+- `body-empty` is now an error, not a warning, and also fails a body with fewer than 3 words, such as `sss`. A skill with valid frontmatter and no real body scored 100 (A); it now scores 75 (C) with Structure and content at F. The rule also quotes the Claude Code docs: the body holds "the instructions Claude follows when the skill runs".
+- When the frontmatter block is missing or isn't valid YAML, only Specification gets a grade. The other areas used to show A because the few checks that could run found nothing. They now have `graded: false`, and the Markdown report says "not graded".
+- New `Report.notApplicable` lists checks that had nothing to look at, instead of counting them as passed: `no-steps` and `no-examples` on a body of 15 lines or fewer, `long-body-no-references` on one of 250 lines or fewer, the body checks on an empty body, and description checks with no description. Area counts ("5 of 6 passed") leave them out.
+- `AreaScore` has two new fields, `graded` and `notApplicable`. `scoreAreas()` takes an optional third argument, `{ notApplicable, frontmatterBroken }`.
+
 ## 0.3.0
 
 Scoring change: scores in the Skillland index move when the site updates to this version.

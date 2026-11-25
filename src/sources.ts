@@ -195,6 +195,11 @@ export const S = {
     `${CC}#frontmatter-reference`,
     "Claude Code reads the frontmatter only when the opening `---` is the file's first line. Otherwise it treats the whole file, `---` markers included, as skill content.",
   ),
+  ccBody: src(
+    "Claude Code: create your first skill",
+    `${CC}#create-your-first-skill`,
+    "Every skill needs a `SKILL.md` file with two parts: YAML frontmatter between `---` markers that tells Claude when to use the skill, and markdown content with the instructions Claude follows when the skill runs.",
+  ),
   ccBadYaml: src(
     "Claude Code: skill not triggering",
     `${CC}#skill-not-triggering`,
