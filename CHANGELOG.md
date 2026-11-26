@@ -7,6 +7,9 @@ Every release of `@skillland/validator`, newest first, with its release date. A 
 Scoring change: 1 new rule, so a few scores in the Skillland index go down when the site updates to this version.
 
 - New suggestion: `remote-instructions` (the skill tells the agent to fetch an instruction file such as `SKILL.md`, `AGENTS.md`, `CLAUDE.md` or `prompt.md` from a URL, or to follow the steps or commands on a web page). It quotes Anthropic's warning that fetched content can carry malicious instructions. Links to documentation pages and lines that say never to follow fetched content are not flagged.
+- `remote-exec` also catches `curl ... | source` and `source <(curl ...)`.
+- `hidden-link` also flags downloads (`curl`, `wget`, PowerShell) from paste sites and anonymous file hosts such as pastebin.com, transfer.sh or catbox.moe.
+- `encoded-payload` also flags password-protected archives (`unzip -P`, `7z x -p`, `unrar x -p`), which no reviewer or scanner can open.
 
 ## 0.6.0 (2026-11-26)
 

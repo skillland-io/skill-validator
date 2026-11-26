@@ -50,7 +50,7 @@ const SIDE_EFFECT_NAME_RE = /(^|-)(deploy|publish|send|ship|delete|push)(-|$)/;
 const SIDE_EFFECT_DESC_RE = /^\s*(deploys|publishes|sends|ships|deletes|pushes)\b/i;
 const TIME_RE = /\b(as of (20\d\d|january|february|march|april|may|june|july|august|september|october|november|december)|(before|after|since|until) (january|february|march|april|may|june|july|august|september|october|november|december) 20\d\d|recently (added|released)|coming soon)\b/i;
 const REMOTE_EXEC_RE =
-  /\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?((ba|z|da|k)?sh\b|(python3?|node|perl|ruby)(\s+-)?\s*($|[;&|)`'"]))|\b(ba|z)?sh\s+<\(\s*(curl|wget)\b|\b(iwr|invoke-webrequest|irm|invoke-restmethod)\b[^\n|]*\|\s*(iex|invoke-expression)\b|\biex\s*\(\s*\(?\s*New-Object\s+Net\.WebClient/i;
+  /\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?((ba|z|da|k)?sh\b|(python3?|node|perl|ruby)(\s+-)?\s*($|[;&|)`'"]))|\b(ba|z)?sh\s+<\(\s*(curl|wget)\b|\b(iwr|invoke-webrequest|irm|invoke-restmethod)\b[^\n|]*\|\s*(iex|invoke-expression)\b|\biex\s*\(\s*\(?\s*New-Object\s+Net\.WebClient|\b(curl|wget)\b[^\n|]*\|\s*(source|\.)(\s|$|[;&)])|(^|[\s;&|(])(source|\.)\s+<\(\s*(curl|wget)\b/i;
 
 // Security content checks. Each runs over SKILL.md and the bundled text files.
 /** Unicode tag characters (as surrogate pairs) and bidirectional controls: they can hide or reorder text. */
@@ -111,6 +111,9 @@ const FOLLOW_URL_RE =
   /\b(follow|obey|execute|carry out)\b[^.\n]{0,40}\b(instructions?|commands?|steps|directions|prompts?)\b[^.\n]{0,20}https?:\/\/\S+/i;
 const NEGATED_RE = /\b(never|don'?t|do not|refuse to)\b[^.\n]{0,40}\b(follow|fetch|load|run|execute|obey|trust)\b/i;
 
+// Paste sites and anonymous file hosts: anyone can upload there, and the content can change.
+const PASTE_HOST_RE =
+  /https?:\/\/(www\.)?(pastebin\.com|paste\.ee|hastebin\.com|ghostbin\.\w+|rentry\.(co|org)|dpaste\.(com|org)|termbin\.com|transfer\.sh|file\.io|0x0\.st|temp\.sh|catbox\.moe|files\.catbox\.moe|litterbox\.catbox\.moe|anonfiles\.com|gofile\.io|mega\.nz|mediafire\.com)\/\S*/i;
 const SHORTENER_RE = /https?:\/\/(bit\.ly|tinyurl\.com|t\.co|goo\.gl|is\.gd|ow\.ly|buff\.ly|rebrand\.ly|cutt\.ly|shorturl\.at|rb\.gy|tiny\.cc|v\.gd|t\.ly)\/\S+/i;
 const IP_URL_RE = /https?:\/\/(\d{1,3}(\.\d{1,3}){3})\b/g;
 const NON_PUBLIC_IP_RE = /^(0|10|127)\.|^169\.254\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\.|^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|^192\.0\.2\.|^198\.51\.100\.|^203\.0\.113\./;
@@ -152,8 +155,11 @@ function publicIpIn(line: string): string | undefined {
   return undefined;
 }
 
+// unzip -P, 7z x -p..., unrar x -p...: the archive's content can't be scanned or reviewed before it runs.
+const PASSWORD_ARCHIVE_RE = /\bunzip\b[^\n]*\s-P\s*\S|\b7za?\s+[xe]\b[^\n]*\s-p\S|\bunrar\s+[xe]\b[^\n]*\s-p\S/;
 function encodedIn(line: string, path: string): string | undefined {
   if (DECODE_RUN_RE.test(line)) return "decode-then-run code";
+  if (PASSWORD_ARCHIVE_RE.test(line)) return "a password-protected archive";
   if (DATA_FILE_RE.test(path) || DATA_URI_RE.test(line)) return undefined;
   const blob = LONG_BASE64_RE.exec(line)?.[0];
   if (blob && /\d/.test(blob) && /[a-z]/.test(blob) && /[A-Z]/.test(blob)) return `a ${blob.length}-character base64 string`;
@@ -683,7 +689,7 @@ export function validateSkill(input: SkillInput): Report {
     if (hit) add("remote-instructions", `Takes instructions from the web: ${snippet(hit.value, 90)}${where(hit.path, hit.line)}`, lineFor(hit));
   });
   run("hidden-link", () => {
-    const hit = scan((l) => SHORTENER_RE.exec(l)?.[0] ?? publicIpIn(l));
+    const hit = scan((l) => SHORTENER_RE.exec(l)?.[0] ?? publicIpIn(l) ?? (DOWNLOAD_CMD_RE.test(l) ? PASTE_HOST_RE.exec(l)?.[0] : undefined));
     if (hit) add("hidden-link", `Link hides its destination: ${snippet(hit.value, 60)}${where(hit.path, hit.line)}`, lineFor(hit));
   });
   run("network-calls", () => {
