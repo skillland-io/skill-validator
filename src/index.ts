@@ -101,6 +101,16 @@ const SYSTEM_CHANGE_RE =
   /\brm\s+(-[a-zA-Z]+\s+)*-[a-zA-Z]*[rR][a-zA-Z]*\s+(-[a-zA-Z]+\s+)*["']?(\/|\/\*|~\/?|\$HOME\/?|\$\{HOME\}\/?)["']?(?=\s|$|[;&|)])|\bchmod\s+(-R\s+)?(777|[ugoa]*\+s|[4-7][0-7]{3})\b|(>>?|\btee\s+(-a\s+)?)\s*["']?(~|\$HOME)\/\.(bashrc|bash_profile|zshrc|zprofile|zshenv|profile|config\/fish\/config\.fish)\b|(>>?|\btee\s+(-a\s+)?)\s*["']?((~|\$HOME)\/)?\.claude\/settings(\.local)?\.json\b|(>>?|\btee\s+(-a\s+)?)\s*["']?(~|\$HOME)\/\.codex\/config\.toml\b|\bcrontab\s+(-e\b|-\s|[\w./-]+\.(txt|cron)\b)|\|\s*crontab\b|\blaunchctl\s+(load|bootstrap)\b|\bsystemctl\s+(--user\s+)?enable\b|\bschtasks\s+\/create\b|\bmkfs(\.\w+)?\s|\bdd\s+if=\S+\s+of=\/dev\//i;
 const MUTABLE_URL_RE =
   /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/releases\/latest\/download\/[^\s"'`)]+|https:\/\/raw\.githubusercontent\.com\/[\w.-]+\/[\w.-]+\/(main|master|HEAD)\/[^\s"'`)]+\.(sh|bash|ps1|py|js|mjs|exe|bin)\b/i;
+// An agent instruction file on the web (SKILL.md, AGENTS.md, CLAUDE.md, instructions.md, prompt.md, .cursorrules).
+const REMOTE_INSTRUCTION_URL_RE =
+  /https?:\/\/[^\s)`'"<>\]]*\/((SKILL|AGENTS|CLAUDE|GEMINI|instructions?|prompts?|system[-_]?prompt)\.(md|txt)|\.cursorrules)\b/i;
+// A fetch verb shortly before the URL, so "The canonical copy is at <url>" is not a fetch.
+const FETCH_BEFORE_URL_RE = /\b(fetch|download|curl|wget|webfetch|read|load|save|pull|retrieve|install)\b[^.\n]{0,60}$/i;
+// "Follow the steps at https://...", "execute the commands from https://...".
+const FOLLOW_URL_RE =
+  /\b(follow|obey|execute|carry out)\b[^.\n]{0,40}\b(instructions?|commands?|steps|directions|prompts?)\b[^.\n]{0,20}https?:\/\/\S+/i;
+const NEGATED_RE = /\b(never|don'?t|do not|refuse to)\b[^.\n]{0,40}\b(follow|fetch|load|run|execute|obey|trust)\b/i;
+
 const SHORTENER_RE = /https?:\/\/(bit\.ly|tinyurl\.com|t\.co|goo\.gl|is\.gd|ow\.ly|buff\.ly|rebrand\.ly|cutt\.ly|shorturl\.at|rb\.gy|tiny\.cc|v\.gd|t\.ly)\/\S+/i;
 const IP_URL_RE = /https?:\/\/(\d{1,3}(\.\d{1,3}){3})\b/g;
 const NON_PUBLIC_IP_RE = /^(0|10|127)\.|^169\.254\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\.|^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|^192\.0\.2\.|^198\.51\.100\.|^203\.0\.113\./;
@@ -662,6 +672,15 @@ export function validateSkill(input: SkillInput): Report {
   run("mutable-download", () => {
     const hit = scan((l) => (DOWNLOAD_CMD_RE.test(l) ? MUTABLE_URL_RE.exec(l)?.[0] : undefined));
     if (hit) add("mutable-download", `Downloads from a URL that changes: ${snippet(hit.value, 90)}${where(hit.path, hit.line)}`, lineFor(hit));
+  });
+  run("remote-instructions", () => {
+    const hit = scan((l) => {
+      if (NEGATED_RE.test(l)) return undefined;
+      const file = REMOTE_INSTRUCTION_URL_RE.exec(l);
+      if (file && FETCH_BEFORE_URL_RE.test(l.slice(0, file.index))) return file[0];
+      return FOLLOW_URL_RE.exec(l)?.[0].match(/https?:\/\/\S+/)![0].replace(/[)`'".,>\]]+$/, "");
+    });
+    if (hit) add("remote-instructions", `Takes instructions from the web: ${snippet(hit.value, 90)}${where(hit.path, hit.line)}`, lineFor(hit));
   });
   run("hidden-link", () => {
     const hit = scan((l) => SHORTENER_RE.exec(l)?.[0] ?? publicIpIn(l));

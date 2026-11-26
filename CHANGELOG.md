@@ -2,6 +2,12 @@
 
 Every release of `@skillland/validator`, newest first, with its release date. A version that changes scores says so on its first line. skillland.io shows this file at [skillland.io/validate/changelog](https://skillland.io/validate/changelog).
 
+## 0.7.0 (2026-11-26)
+
+Scoring change: 1 new rule, so a few scores in the Skillland index go down when the site updates to this version.
+
+- New suggestion: `remote-instructions` (the skill tells the agent to fetch an instruction file such as `SKILL.md`, `AGENTS.md`, `CLAUDE.md` or `prompt.md` from a URL, or to follow the steps or commands on a web page). It quotes Anthropic's warning that fetched content can carry malicious instructions. Links to documentation pages and lines that say never to follow fetched content are not flagged.
+
 ## 0.6.0 (2026-11-26)
 
 Scoring change: 3 new rules, so some scores in the Skillland index go down when the site updates to this version.
