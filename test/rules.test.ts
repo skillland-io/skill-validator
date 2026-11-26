@@ -61,6 +61,10 @@ const CASES: Record<string, { fail: Case[]; pass: Case[] }> = {
     fail: ["---\nname: [unclosed\n---\nbody text here\n", "---\n- a\n- b\n---\nbody text here\n"],
     pass: [skill(), skill({ description: `"Fixes bugs: finds the cause first. Use when a test fails and you need the cause."` })],
   },
+  "byte-order-mark": {
+    fail: [{ ...skill(), skillMd: `\uFEFF${md()}` }, `\uFEFF${md()}`],
+    pass: [skill(), skill({ body: withText("A mid\uFEFFfile byte order mark is left to hidden-characters.") })],
+  },
   "name-missing": { fail: [`---\ndescription: ${DESC}\n---\n\n${BODY}`], pass: [skill()] },
   "name-format": {
     fail: [skill({ name: "PDF_Tools", folderName: "PDF_Tools" }), skill({ name: "pdf--tools", folderName: "pdf--tools" }), skill({ name: "a".repeat(65), folderName: "a".repeat(65) })],
@@ -169,6 +173,19 @@ const CASES: Record<string, { fail: Case[]; pass: Case[] }> = {
     fail: [skill({ fm: "metadata: just a string" }), skill({ fm: "metadata:\n  tags:\n    - a\n    - b" })],
     pass: [skill({ fm: "metadata:\n  author: acme\n  version: '1.0'" }), skill()],
   },
+  "non-string-keys": {
+    fail: [
+      skill({ fm: "metadata:\n  2024: first release" }),
+      skill({ fm: "metadata:\n  true: x" }),
+      skill({ fm: "metadata:\n  yes: x" }),
+      skill({ fm: "metadata:\n  release:\n    2026-01-01: launch" }),
+    ],
+    pass: [
+      skill(),
+      skill({ fm: 'metadata:\n  "2024": first release\n  \'yes\': x' }),
+      skill({ fm: "metadata:\n  version: 1.0\n  enabled: true\n  v2: next" }),
+    ],
+  },
   "legacy-globs": { fail: [skill({ fm: 'globs: "*.py"' })], pass: [skill(), skill({ fm: 'paths: "*.py"' })] },
   "description-listing-too-long": {
     fail: [skill({ fm: `when_to_use: ${"Use when the user asks about PDF forms. ".repeat(40)}` })],
@@ -184,6 +201,14 @@ const CASES: Record<string, { fail: Case[]; pass: Case[] }> = {
   },
   "generic-file-names": { fail: [skill({ files: { "references/doc1.md": "# One\n" } })], pass: [skill()] },
   "extraneous-files": { fail: [skill({ files: { "README.md": "# Readme\n" } })], pass: [skill(), skill({ files: { "references/README.md": "# Readme\n" } })] },
+  "claude-only-placeholders": {
+    fail: [
+      skill({ body: withText("Fix the issue in $ARGUMENTS.") }),
+      skill({ body: withText("```bash\npython ${CLAUDE_SKILL_DIR}/scripts/run.py\n```") }),
+      skill({ body: withText("Read ${CLAUDE_PROJECT_DIR}/package.json first.") }),
+    ],
+    pass: [skill(), skill({ body: withText("It costs $5 and $10 a month. Use $ARGUMENTS_FILE from the env.") }), skill({ body: withText("Run scripts/check.sh from this skill's folder.") })],
+  },
   "interactive-script": {
     fail: [
       skill({ files: { "scripts/ask.py": 'name = input("Name? ")\n' } }),
@@ -386,6 +411,17 @@ describe("every rule fails and passes on purpose", () => {
       expect(validateSkill(skill({ body: withText(rule.bad) })).findings.map((f) => f.ruleId), id).toContain(id);
       expect(validateSkill(skill({ body: withText(rule.good) })).findings.map((f) => f.ruleId), id).not.toContain(id);
     }
+  });
+});
+
+describe("frontmatter-invalid-yaml message", () => {
+  it("says Codex skips a skill with duplicate keys or tabs", () => {
+    for (const fmText of ["license: MIT\nlicense: MIT", "metadata:\n\tauthor: acme"]) {
+      const f = validateSkill(skill({ fm: fmText })).findings.find((x) => x.ruleId === "frontmatter-invalid-yaml");
+      expect(f?.message).toContain("(Codex skips the skill)");
+    }
+    const other = validateSkill({ skillMd: "---\nname: [unclosed\n---\nbody text here\n" }).findings.find((x) => x.ruleId === "frontmatter-invalid-yaml");
+    expect(other?.message).not.toContain("Codex");
   });
 });
 

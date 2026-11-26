@@ -12,7 +12,7 @@ Website: **[skillland.io](https://skillland.io)**. Check a skill in the browser,
 
 Lints agent skills (`SKILL.md` folders) for Claude Code, Codex, Cursor and any other agent that follows the [Agent Skills specification](https://agentskills.io/specification).
 
-Every rule quotes, word for word, the sentence of official guidance it relies on: the spec, Anthropic's and Claude Code's docs (including Anthropic's guide to vetting skills for enterprise use), OpenAI's and Cursor's docs, the validation scripts Anthropic and OpenAI ship with their skill creators, and the OWASP Agentic Skills Top 10. Where a rule needs a number the sources leave open, such as a length threshold, the rule says so in `ourCall`.
+Every rule quotes, word for word, the sentence of official guidance it relies on: the spec, Anthropic's and Claude Code's docs (including Anthropic's guide to vetting skills for enterprise use), OpenAI's and Cursor's docs, the validation scripts Anthropic and OpenAI ship with their skill creators, NVIDIA's skill docs and SkillEvaluator reference, and the OWASP Agentic Skills Top 10. Where a rule needs a number the sources leave open, such as a length threshold, the rule says so in `ourCall`.
 
 The same rules score the public skills on [skillland.io](https://skillland.io). Each rule has a page at [skillland.io/validate/rules](https://skillland.io/validate/rules).
 

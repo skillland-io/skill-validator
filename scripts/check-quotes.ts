@@ -22,6 +22,7 @@ function readableUrl(url: string): string {
     case "code.claude.com":
     case "learn.chatgpt.com":
     case "cursor.com":
+    case "docs.nvidia.com":
       return `${u.origin}${p}.md`;
     default:
       return `${u.origin}${p}`;
@@ -32,7 +33,7 @@ const normalize = (text: string) =>
   text
     .replace(/<\/?[a-zA-Z][^>]*>/g, " ")
     .replace(/[`*_]/g, "")
-    .replace(/\\([[\]()])/g, "$1")
+    .replace(/\\([[\]()~])/g, "$1")
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/&lt;/g, "<")
