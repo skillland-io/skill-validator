@@ -2,7 +2,7 @@ import type { RuleSource } from "./types";
 
 /**
  * Every source a rule cites, with the sentence it relies on, copied word for word from the page.
- * Checked against the live pages on 2026-11-20; security sources added 2026-11-26. When a page changes, update the quote here.
+ * Checked against the live pages on 2026-11-20; security and NVIDIA sources added 2026-11-26. When a page changes, update the quote here.
  */
 const SPEC = "https://agentskills.io/specification";
 const AS_SCRIPTS = "https://agentskills.io/skill-creation/using-scripts";
@@ -15,6 +15,9 @@ const OWASP_AST = "https://github.com/OWASP/www-project-agentic-skills-top-10/bl
 const CURSOR = "https://cursor.com/docs/skills";
 const ANTHROPIC_CREATOR = "https://github.com/anthropics/skills/blob/main/skills/skill-creator";
 const OPENAI_CREATOR = "https://github.com/openai/skills/blob/main/skills/.system/skill-creator";
+const NV = "https://docs.nvidia.com/skills";
+const NV_HARNESS = `${NV}/skillevaluator/harness-check`;
+const NV_TIER1 = `${NV}/skillevaluator/tier1-reference#the-checks`;
 
 const src = (label: string, url: string, quote: string): RuleSource => ({ label, url, quote });
 
@@ -322,6 +325,11 @@ export const S = {
     `${CC}#pre-approve-tools-for-a-skill`,
     "A skill can grant itself broad tool access, so review the `allowed-tools` of skills checked into a repository before you run Claude Code there.",
   ),
+  ccPlaceholders: src(
+    "Claude Code: available string substitutions",
+    `${CC}#available-string-substitutions`,
+    "Skills support string substitution for dynamic values in the skill content:",
+  ),
   ccSideEffects: src(
     "Claude Code: control who invokes a skill",
     `${CC}#control-who-invokes-a-skill`,
@@ -376,6 +384,116 @@ export const S = {
     `${CURSOR}#disabling-automatic-invocation`,
     "Set `disable-model-invocation: true` to make a skill behave like a traditional slash command",
   ),
+
+  nvStrictYaml: src(
+    "NVIDIA SkillEvaluator: Harness Check, fix what it finds",
+    `${NV_HARNESS}#fix-what-it-finds`,
+    "Codex, Copilot CLI, OpenClaw and OpenCode parse front matter strictly.",
+  ),
+  nvFrontmatterRules: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, harness check",
+    NV_TIER1,
+    "Frontmatter rules: duplicate keys (Codex, Copilot CLI, OpenClaw and OpenCode drop the skill), tab indentation (Codex, Copilot CLI and OpenClaw), a UTF-8 BOM (Codex), no front matter (Copilot CLI), and long custom frontmatter that never reaches the model.",
+  ),
+  nvBom: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, schema check",
+    NV_TIER1,
+    "A duplicate frontmatter key is HIGH (`duplicate_key`; several harnesses drop the skill), and a UTF-8 BOM is MEDIUM (`manifest_bom`).",
+  ),
+  nvStringKeys: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, schema check",
+    NV_TIER1,
+    "Frontmatter keys, including keys nested under `metadata`, must be strings.",
+  ),
+  nvRequired: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, schema check",
+    NV_TIER1,
+    "`name` and `description` are required. Names are 1–64 characters; descriptions are 1–1024 characters.",
+  ),
+  nvNameFolder: src("NVIDIA SkillEvaluator: Tier 1 reference, schema check", NV_TIER1, "The directory name must match the frontmatter `name`."),
+  nvReserved: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, schema check",
+    NV_TIER1,
+    "The reserved words `anthropic` and `claude` must not appear in a skill name.",
+  ),
+  nvGlobs: src("NVIDIA SkillEvaluator: Tier 1 reference, schema check", NV_TIER1, "`alwaysApply` and `globs` are forbidden skill fields."),
+  nvUnknownField: src("NVIDIA SkillEvaluator: Tier 1 reference, schema check", NV_TIER1, "Fields outside the spec are LOW (`unknown_field`)."),
+  nvLines: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, schema check",
+    NV_TIER1,
+    "`SKILL.md` should stay at or below 500 lines; larger files receive an advisory finding.",
+  ),
+  nvXml: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, quality check",
+    NV_TIER1,
+    "Correctness reports XML-style tags in any frontmatter value as a HIGH finding (potential prompt injection).",
+  ),
+  nvTokenBudget: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, quality check",
+    NV_TIER1,
+    "The 5,000-token budget for `SKILL.md` is a recommendation, not a hard limit.",
+  ),
+  nvCodexDelivery: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, harness check",
+    NV_TIER1,
+    "Delivery rules: Claude Code's body cap, … and Codex's ~10K-token cut when the model reads `SKILL.md` through the shell.",
+  ),
+  nvListingCut: src(
+    "NVIDIA SkillEvaluator: Harness Check, fix what it finds",
+    `${NV_HARNESS}#fix-what-it-finds`,
+    "Codex cuts at 1,024 characters, Claude Code at 1,536, and Copilot CLI drops the skill past 1,024 UTF-16 units.",
+  ),
+  nvTriggerFirst: src(
+    "NVIDIA SkillEvaluator: Harness Check, fix what it finds",
+    `${NV_HARNESS}#fix-what-it-finds`,
+    "Put the trigger first and keep the description under 1,024 characters.",
+  ),
+  nvInvocation: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, harness check",
+    NV_TIER1,
+    "Invocation rules: `disable-model-invocation` (ignored by Codex, Hermes and OpenCode), Codex's `agents/openai.yaml` implicit-invocation policy (Codex only)",
+  ),
+  nvPlaceholders: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, harness check",
+    NV_TIER1,
+    "Placeholder rules: `$ARGUMENTS` and `${CLAUDE_SKILL_DIR}` are substituted only by Claude Code, and price-like `$N` text is replaced with arguments by Claude Code and OpenCode.",
+  ),
+  nvUnicode: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, unicode check",
+    NV_TIER1,
+    "Detects invisible Unicode characters associated with ASCII smuggling, hidden-data encoding, and trojan-source attacks.",
+  ),
+  nvFixtures: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, code-integrity check",
+    NV_TIER1,
+    "Files under a folder named `tests`, `examples`, `fixtures`, or `mocks`, or the singular form, are skipped at any depth",
+  ),
+  nvHygiene: src(
+    "NVIDIA SkillEvaluator: Tier 1 reference, code-integrity check",
+    NV_TIER1,
+    "**Hygiene** — dead relative Markdown links, banned or unpinned dependency declarations, and static discovery of conventional Python test filenames.",
+  ),
+  nvRisky: src(
+    "NVIDIA: scan agent skills before installation",
+    `${NV}/scanning-agent-skills`,
+    "Agent skills can look harmless while still containing risky instructions, hidden metadata, overbroad permissions, or executable code that does more than the description says.",
+  ),
+  nvPluginParts: src(
+    "NVIDIA: scan agent skills before installation, scan a plugin",
+    `${NV}/scanning-agent-skills#scan-a-plugin`,
+    "Review a plugin's MCP server, hooks, commands, and subagents separately before installing.",
+  ),
+  nvPermissions: src(
+    "NVIDIA: a trust pipeline for agent skills, review questions",
+    `${NV}/agent-skill-trust-pipeline#review-questions`,
+    "Are permissions limited to what the skill or plugin actually needs?",
+  ),
+  nvCapabilities: src(
+    "NVIDIA: a trust pipeline for agent skills, review questions",
+    `${NV}/agent-skill-trust-pipeline#review-questions`,
+    "Are network, shell, file, environment, and MCP capabilities declared in the `SKILL.md` frontmatter and justified by the skill's stated use case?",
+  ),
+  nvActivate: src("NVIDIA: release checklist, before scanning", `${NV}/release-checklist#before-scanning`, "`SKILL.md` describes when the skill should activate."),
 
   owaspSecrets: src(
     "OWASP Secrets Management Cheat Sheet",

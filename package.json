@@ -1,6 +1,6 @@
 {
   "name": "@skillland/validator",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Lint SKILL.md agent skills against the Agent Skills spec and the official guidance from Anthropic, OpenAI and Cursor. Every rule quotes its source.",
   "keywords": [
     "agent-skills",

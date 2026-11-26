@@ -2,6 +2,18 @@
 
 Every release of `@skillland/validator`, newest first, with its release date. A version that changes scores says so on its first line. skillland.io shows this file at [skillland.io/validate/changelog](https://skillland.io/validate/changelog).
 
+## 0.6.0 (2026-11-26)
+
+Scoring change: 3 new rules, so some scores in the Skillland index go down when the site updates to this version.
+
+NVIDIA's skill docs are now a source. Its [SkillEvaluator Harness Check](https://docs.nvidia.com/skills/skillevaluator/harness-check) records what Claude Code, Codex and four other agents actually load, cut or drop, so it backs rules that the vendor docs leave unstated.
+
+- New warnings: `byte-order-mark` (`SKILL.md` starts with a UTF-8 byte order mark, which makes Codex drop the skill), `non-string-keys` (unquoted frontmatter keys such as `true:`, `yes:`, `2024:` or a date, which YAML may read as something other than text).
+- New suggestion: `claude-only-placeholders` (`$ARGUMENTS`, `${CLAUDE_SKILL_DIR}` or `${CLAUDE_PROJECT_DIR}`, which only Claude Code fills in).
+- `frontmatter-invalid-yaml` says "(Codex skips the skill)" when the problem is a duplicate key or tab indentation.
+- 24 existing rules add an NVIDIA quote, including `description-listing-too-long` (Codex cuts the listing at 1,024 characters), `body-too-many-tokens` (Codex's ~10K-token read through the shell) and `side-effects-auto-invoke` (Codex ignores `disable-model-invocation`).
+- `npm run check-quotes` reads docs.nvidia.com pages as Markdown.
+
 ## 0.5.0 (2026-11-26)
 
 Scoring change: 14 new Security rules, so some scores in the Skillland index go down when the site updates to this version.

@@ -1,4 +1,4 @@
-import { parse as parseYaml } from "yaml";
+import { isMap, isScalar, parse as parseYaml, parseDocument } from "yaml";
 import { RULES, RULES_BY_ID, getRule } from "./rules";
 import type { AreaScore, Finding, Grade, Report, RuleCategory, SkillInput } from "./types";
 
@@ -178,6 +178,29 @@ function secretIn(line: string): string | undefined {
 
 const tokens = (text: string) => Math.ceil(text.length / 4);
 
+// Unquoted keys that a YAML 1.1 parser reads as a boolean, null, number or date rather than text.
+const NON_STRING_KEY_RE = /^(true|false|yes|no|on|off|y|n|null|~|[-+]?(\d[\d_]*)?\.?\d+([eE][-+]?\d+)?|0x[0-9a-fA-F]+|0o[0-7]+|\d{4}-\d{2}-\d{2})$/i;
+const CLAUDE_ONLY_PLACEHOLDER_RE = /\$ARGUMENTS\b|\$\{CLAUDE_(SKILL|PROJECT)_DIR\}/;
+
+/** Every unquoted frontmatter key, at any depth, that YAML may read as something other than text. */
+function nonStringKeys(fmText: string): { key: string; line: number }[] {
+  const out: { key: string; line: number }[] = [];
+  const doc = parseDocument(fmText, { uniqueKeys: false, logLevel: "silent" });
+  const walk = (node: unknown) => {
+    if (!isMap(node)) return;
+    for (const item of node.items) {
+      const k = item.key;
+      if (isScalar(k) && k.type === "PLAIN" && k.range) {
+        const raw = fmText.slice(k.range[0], k.range[1]).trim();
+        if (NON_STRING_KEY_RE.test(raw)) out.push({ key: raw, line: fmText.slice(0, k.range[0]).split("\n").length });
+      }
+      walk(item.value);
+    }
+  };
+  walk(doc.contents);
+  return out;
+}
+
 interface Parsed {
   frontmatter: Record<string, unknown> | null;
   yamlError?: string;
@@ -275,7 +298,13 @@ export function validateSkill(input: SkillInput): Report {
     if (!fm) add("frontmatter-missing", getRule("frontmatter-missing").problem, 1);
   });
   run("frontmatter-invalid-yaml", () => {
-    if (parsed.yamlError) add("frontmatter-invalid-yaml", `Frontmatter is not valid YAML: ${parsed.yamlError.slice(0, 80)}`, 1);
+    if (!parsed.yamlError) return;
+    // NVIDIA's harness tests: Codex drops a skill with duplicate keys or tab indentation.
+    const codex = /Map keys must be unique|Tabs are not allowed/.test(parsed.yamlError) ? " (Codex skips the skill)" : "";
+    add("frontmatter-invalid-yaml", `Frontmatter is not valid YAML: ${parsed.yamlError.slice(0, 80)}${codex}`, 1);
+  });
+  run("byte-order-mark", () => {
+    if (input.skillMd.startsWith("\uFEFF")) add("byte-order-mark", getRule("byte-order-mark").problem, 1);
   });
 
   if (fm && !parsed.yamlError) {
@@ -363,6 +392,10 @@ export function validateSkill(input: SkillInput): Report {
       const bad = Object.entries(m as Record<string, unknown>).find(([, v]) => v !== null && typeof v === "object");
       if (bad) add("metadata-format", `\`metadata.${bad[0]}\` is a ${Array.isArray(bad[1]) ? "list" : "map"}, not a string`, fmLine("metadata"));
     });
+    run("non-string-keys", () => {
+      const hit = nonStringKeys(parsed.fmLines.join("\n"))[0];
+      if (hit) add("non-string-keys", `Key \`${hit.key}\` is not quoted, so YAML may not read it as text`, hit.line + 1);
+    });
     run("legacy-globs", () => {
       if (fm.globs !== undefined) add("legacy-globs", getRule("legacy-globs").problem, fmLine("globs"));
     });
@@ -433,6 +466,10 @@ export function validateSkill(input: SkillInput): Report {
     run("windows-paths", () => {
       const hit = rows.find((r) => RELATIVE_BACKSLASH_RE.test(r.text) || (!r.inFence && DRIVE_PATH_RE.test(r.text)));
       if (hit) add("windows-paths", `Path uses backslashes: "${hit.text.trim().slice(0, 60)}"`, hit.line);
+    });
+    run("claude-only-placeholders", () => {
+      const hit = rows.find((r) => CLAUDE_ONLY_PLACEHOLDER_RE.test(r.text));
+      if (hit) add("claude-only-placeholders", `\`${CLAUDE_ONLY_PLACEHOLDER_RE.exec(hit.text)![0]}\` is filled in only by Claude Code`, hit.line);
     });
     run("time-sensitive", () => {
       const hit = firstMatch(TIME_RE);
