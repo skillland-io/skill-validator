@@ -2,6 +2,23 @@
 
 Every release of `@skillland/validator`, newest first, with its release date. A version that changes scores says so on its first line. skillland.io shows this file at [skillland.io/validate/changelog](https://skillland.io/validate/changelog).
 
+## 0.5.0 (2026-11-26)
+
+Scoring change: 14 new Security rules, so some scores in the Skillland index go down when the site updates to this version.
+
+The checks from the skillland.io security scan now live here, each with an official quote, so the scan page and the grades use the same rules. Most quotes come from Anthropic's [Skills for enterprise](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/enterprise) guide (its risk table and review checklist) and the [OWASP Agentic Skills Top 10](https://github.com/OWASP/www-project-agentic-skills-top-10).
+
+- New severity `note`: a fact to review, not a fault. It costs no points and counts as neither passed nor failed. Note rules that found something are listed in the new `Report.noted`.
+- New errors: `hidden-characters` (Unicode tag characters, bidi controls, runs of zero-width characters), `unsafe-yaml-tag` (`!!python/object` and other code-running YAML tags in the frontmatter).
+- New warnings: `instruction-manipulation` ("ignore previous instructions", "don't tell the user."), `permission-bypass` (`--dangerously-skip-permissions`, `danger-full-access`, `--yolo` and similar, unless the file says it runs in a container or VM), `secrets-and-network` (one file reads a credential file and calls the network), `encoded-payload` (decode-then-run code, long base64 or hex payloads), `plain-http-download` (downloads over `http://` from public hosts).
+- New suggestions: `skill-hooks` (`hooks` in the frontmatter), `credential-files`, `system-changes` (shell startup files, agent settings, scheduled jobs, recursive deletes of `/` or `~`), `mutable-download` (`releases/latest` and branch URLs), `hidden-link` (URL shorteners and public IP addresses).
+- New notes: `network-calls`, `binary-files`.
+- `remote-exec` also catches `curl ... | python`, `bash <(curl ...)` and `iex (New-Object Net.WebClient)...`, and now reads the bundled files too, not only the SKILL.md body.
+- `broad-allowed-tools` also flags unrestricted `Shell`.
+- Security checks skip tests, test data and bundled third-party or built code (`node_modules/`, `vendor/`, `dist/`, `build/`, `*.min.js`).
+- The YAML parser no longer prints warnings to the console for unknown tags.
+- New test file covers every rule with at least one failing and one passing case, and fails when a rule has none.
+
 ## 0.4.0 (2026-11-25)
 
 Scoring change: a near-empty skill can no longer score A. Scores in the Skillland index move when the site updates to this version.

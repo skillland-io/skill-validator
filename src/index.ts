@@ -6,7 +6,8 @@ export * from "./types";
 export { RULES, RULES_BY_ID, getRule } from "./rules";
 export { S as SOURCES } from "./sources";
 
-export const PENALTY = { error: 25, warning: 8, info: 2 } as const;
+/** Points off per failing rule. A note is a fact to review, not a fault, so it costs nothing. */
+export const PENALTY = { error: 25, warning: 8, info: 2, note: 0 } as const;
 /**
  * An error caps the score of its own area at this, so that area shows F. The overall score is
  * capped only when the frontmatter block is missing or isn't valid YAML, since no agent can load that skill.
@@ -17,7 +18,7 @@ export const AREAS: { id: RuleCategory; label: string; summary: string }[] = [
   { id: "spec", label: "Specification", summary: "Fields and format the Agent Skills specification requires" },
   { id: "description", label: "Description", summary: "Whether an agent can tell when to use the skill" },
   { id: "structure", label: "Structure and content", summary: "How the body and the bundled files are laid out" },
-  { id: "security", label: "Security", summary: "Secrets, shell commands and side effects" },
+  { id: "security", label: "Security", summary: "Secrets, hidden instructions, shell commands and side effects" },
 ];
 export const GRADE_BANDS: [Grade, number][] = [
   ["A", 90],
@@ -48,7 +49,106 @@ const INTERACTIVE_BY_EXT: [RegExp, RegExp][] = [
 const SIDE_EFFECT_NAME_RE = /(^|-)(deploy|publish|send|ship|delete|push)(-|$)/;
 const SIDE_EFFECT_DESC_RE = /^\s*(deploys|publishes|sends|ships|deletes|pushes)\b/i;
 const TIME_RE = /\b(as of (20\d\d|january|february|march|april|may|june|july|august|september|october|november|december)|(before|after|since|until) (january|february|march|april|may|june|july|august|september|october|november|december) 20\d\d|recently (added|released)|coming soon)\b/i;
-const REMOTE_EXEC_RE = /\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(ba|z|k)?sh\b|\b(iwr|invoke-webrequest|irm|invoke-restmethod)\b[^\n|]*\|\s*(iex|invoke-expression)\b/i;
+const REMOTE_EXEC_RE =
+  /\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?((ba|z|da|k)?sh\b|(python3?|node|perl|ruby)(\s+-)?\s*($|[;&|)`'"]))|\b(ba|z)?sh\s+<\(\s*(curl|wget)\b|\b(iwr|invoke-webrequest|irm|invoke-restmethod)\b[^\n|]*\|\s*(iex|invoke-expression)\b|\biex\s*\(\s*\(?\s*New-Object\s+Net\.WebClient/i;
+
+// Security content checks. Each runs over SKILL.md and the bundled text files.
+/** Unicode tag characters (as surrogate pairs) and bidirectional controls: they can hide or reorder text. */
+const TAG_BIDI_RE = /\uDB40[\uDC00-\uDC7F]|[\u202A-\u202E\u2066-\u2069]/g;
+/** Zero-width characters that can carry text in a sequence. One stray zero-width space is common and harmless. */
+const ZERO_WIDTH_RE = /[\u200B\u200C\u2060-\u2064]/g;
+/** Files the model reads as instructions; in code, only tag and bidi characters count (zero-width ones appear in string literals). */
+const PROSE_FILE_RE = /\.(md|mdx|markdown|txt|ya?ml)$/i;
+/** Bundled third-party or generated code and tests: not written as part of the skill's instructions. */
+const NOT_SKILL_CODE_RE = /(^|\/)(node_modules|vendor|dist|build|tests?|__tests__|spec)\/|\.min\.(js|css)$|\.(test|spec)\.[jt]sx?$/i;
+const UNSAFE_YAML_TAG_RE = /!!(python|js|javascript|ruby|perl|java|php)\/|!<tag:yaml\.org,2002:(python|js|ruby|perl|java|php)\//i;
+const MANIPULATION_RE = new RegExp(
+  [
+    String.raw`\b(ignore|disregard|forget|override|discard)\s+(all\s+|any\s+)?(of\s+)?(the\s+|your\s+)?(previous|prior|above|earlier|preceding|system|safety|baseline)\s+(instructions|rules|prompts?|guidelines|directions|safeguards)\b`,
+    String.raw`\b(ignore|override|bypass|disable)\s+(all|any|your)\s+(of\s+)?(your\s+)?(safety|security)\s+(rules|guidelines|checks|filters|safeguards|restrictions)\b`,
+    String.raw`\b(do not|don't|never)\s+(tell|inform|alert|notify)\s+(the user|the human|anyone)(\s+(about (this|it|these|that)|that you|what you|you('re| are| have|'ve)))?\s*([.;:!]|$)`,
+    String.raw`\bwithout\s+(telling|informing|notifying|alerting)\s+(the user|the human|anyone)\s*([.;!]|$)`,
+    String.raw`\bhide\s+(this|it|these|that|your actions?)\s+from\s+(the user|the human)\b`,
+  ].join("|"),
+  "i",
+);
+/** Lines that quote such phrases in order to warn the agent against them. */
+const DEFENSIVE_RE =
+  /\b(not instructions|treat (it|them|this|that|every|all|any|fetched|the)\b|flag (it|them|this)|disregard (it|them)|refuse|resist|prompt[- ]injection|injection attempt|(if|when) (a |the |any )?(file|page|content|response|document|text|input|message|tool result|website|email|issue|comment)s? (says|tries|contains|tells|asks|includes)|such as|e\.g\.|for example|attempts? to|jailbreak)\b/i;
+const BYPASS_RE = /--dangerously-skip-permissions\b|\bbypassPermissions\b|--dangerously-bypass-approvals-and-sandbox\b|\bdanger-full-access\b|(^|[\s"'`])--yolo\b/;
+/** The flag is used, not just named: an agent command on the same line, or a setting that assigns the mode. */
+const BYPASS_USE_RE =
+  /\b(claude|codex|gemini|qwen|kimi|cursor-agent|copilot|amp|opencode|aider|droid|crush)\b[^\n]*(--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|danger-full-access|--yolo|bypassPermissions)|(permission_?mode|defaultMode|sandbox(_mode)?|approval_?policy)["']?\s*[:=]\s*["']?(bypassPermissions|danger-full-access)/i;
+const ISOLATED_RE = /\b(container|docker|devcontainer|podman|VM|virtual machine|isolated environment|disposable environment)s?\b/i;
+const CREDENTIAL_FILE_RE =
+  /(~|\$HOME)\/\.ssh\b|\bid_(rsa|ed25519|ecdsa|dsa)\b(?!\.pub)|\.aws\/credentials\b|(^|[\s"'`/~(])\.(netrc|pypirc)\b|\.kube\/config\b|\.docker\/config\.json\b|(~|\$HOME)\/\.config\/gh\b|\/etc\/shadow\b|\bLogin Data\b|Cookies\.binarycookies|\bwallet\.dat\b|\bsecurity\s+find-(generic|internet)-password\b/i;
+/** Credential files that hold secrets themselves, unlike `~/.ssh`, which is mostly config. */
+const SECRET_FILE_RE =
+  /\bid_(rsa|ed25519|ecdsa|dsa)\b(?!\.pub)|\.aws\/credentials\b|(^|[\s"'`/~(])\.netrc\b|\.docker\/config\.json\b|\.kube\/config\b|\/etc\/shadow\b|\bLogin Data\b|Cookies\.binarycookies|\bwallet\.dat\b|\bsecurity\s+find-(generic|internet)-password\b/i;
+const NETWORK_RE =
+  /\b(curl|wget|ncat|scp|rsync)\s|\bnc\s+-|\bfetch\s*\(|\brequests\.(get|post|put|patch|delete|request)\s*\(|\burllib\.request\b|\bhttpx\.|\bhttps?\.(get|request)\s*\(|\baxios\b|\bInvoke-WebRequest\b|\bInvoke-RestMethod\b|\biwr\s|\birm\s|\bWebClient\b/i;
+const DECODE_RUN_RE =
+  /\bbase64\s+(-d|--decode|-D)\b[^\n]*\|\s*(sudo\s+)?((ba|z|da|k)?sh|python3?|node|perl)\b|\b(eval|exec|Function)\s*\(\s*(atob|Buffer\.from|base64\.b64decode|b64decode|codecs\.decode|bytes\.fromhex)\b|\bexec\s*\(\s*__import__\(\s*["']base64|FromBase64String[^\n]*\b(Invoke-Expression|iex)\b|(\\x[0-9a-f]{2}){16,}|String\.fromCharCode\(\s*\d+\s*(,\s*\d+\s*){15,}\)/i;
+const LONG_BASE64_RE = /[A-Za-z0-9+/]{200,}={0,2}/;
+const DATA_URI_RE = /data:[a-z]+\/[\w.+-]+;base64,/i;
+/** Files that hold data rather than instructions or code, where long base64 strings are normal. */
+const DATA_FILE_RE = /(^|\/)assets\/|\.(json|svg|csv|tsv|lock|txt|xml|html?|map)$/i;
+const DOWNLOAD_CMD_RE = /\b(curl|wget|iwr|irm|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|urlretrieve)\b/i;
+const HTTP_URL_RE = /(?<!(Origin|Referer|Host):\s*["']?)\bhttp:\/\/([^\s/"'`<>)\]:]+)/gi;
+const LOCAL_HOST_RE =
+  /^(localhost|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|169\.254\.\d+\.\d+|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+|(192\.0\.2|198\.51\.100|203\.0\.113)\.\d+|\[?::1\]?|host\.docker\.internal)$|\.(local|localhost|internal|test|example|invalid|lan|home)$|(^|\.)example\.(com|org|net)$|[$<{%]/i;
+const SYSTEM_CHANGE_RE =
+  /\brm\s+(-[a-zA-Z]+\s+)*-[a-zA-Z]*[rR][a-zA-Z]*\s+(-[a-zA-Z]+\s+)*["']?(\/|\/\*|~\/?|\$HOME\/?|\$\{HOME\}\/?)["']?(?=\s|$|[;&|)])|\bchmod\s+(-R\s+)?(777|[ugoa]*\+s|[4-7][0-7]{3})\b|(>>?|\btee\s+(-a\s+)?)\s*["']?(~|\$HOME)\/\.(bashrc|bash_profile|zshrc|zprofile|zshenv|profile|config\/fish\/config\.fish)\b|(>>?|\btee\s+(-a\s+)?)\s*["']?((~|\$HOME)\/)?\.claude\/settings(\.local)?\.json\b|(>>?|\btee\s+(-a\s+)?)\s*["']?(~|\$HOME)\/\.codex\/config\.toml\b|\bcrontab\s+(-e\b|-\s|[\w./-]+\.(txt|cron)\b)|\|\s*crontab\b|\blaunchctl\s+(load|bootstrap)\b|\bsystemctl\s+(--user\s+)?enable\b|\bschtasks\s+\/create\b|\bmkfs(\.\w+)?\s|\bdd\s+if=\S+\s+of=\/dev\//i;
+const MUTABLE_URL_RE =
+  /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/releases\/latest\/download\/[^\s"'`)]+|https:\/\/raw\.githubusercontent\.com\/[\w.-]+\/[\w.-]+\/(main|master|HEAD)\/[^\s"'`)]+\.(sh|bash|ps1|py|js|mjs|exe|bin)\b/i;
+const SHORTENER_RE = /https?:\/\/(bit\.ly|tinyurl\.com|t\.co|goo\.gl|is\.gd|ow\.ly|buff\.ly|rebrand\.ly|cutt\.ly|shorturl\.at|rb\.gy|tiny\.cc|v\.gd|t\.ly)\/\S+/i;
+const IP_URL_RE = /https?:\/\/(\d{1,3}(\.\d{1,3}){3})\b/g;
+const NON_PUBLIC_IP_RE = /^(0|10|127)\.|^169\.254\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\.|^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|^192\.0\.2\.|^198\.51\.100\.|^203\.0\.113\./;
+const BINARY_EXT_RE = /\.(exe|dll|so|dylib|bin|o|a|class|jar|pyc|wasm|msi|dmg|pkg|deb|rpm|apk)$/i;
+
+const codePoint = (c: string) => `U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`;
+
+/**
+ * Characters on a line that can hide text: any tag or bidi control, and in prose files two or more
+ * zero-width characters. Joiners in emoji, a BOM, soft hyphens and direction marks are left out.
+ */
+function hiddenIn(line: string, path: string): string[] {
+  const found = [...line.matchAll(TAG_BIDI_RE)].map((m) => codePoint(m[0]));
+  const zero = PROSE_FILE_RE.test(path) ? [...line.matchAll(ZERO_WIDTH_RE)].map((m) => codePoint(m[0])) : [];
+  return zero.length >= 2 ? [...found, ...zero] : found;
+}
+
+/** A phrase that tells the agent to hide something or drop its rules, unless the line quotes it as a warning. */
+function manipulationIn(line: string): string | undefined {
+  const m = MANIPULATION_RE.exec(line);
+  if (!m) return undefined;
+  const before = line.slice(Math.max(0, m.index - 2), m.index);
+  if (/["'“‘`(]/.test(before) || DEFENSIVE_RE.test(line)) return undefined;
+  return m[0].trim();
+}
+
+/** The first public host on a download line served over plain HTTP. */
+function plainHttpHost(line: string): string | undefined {
+  if (!DOWNLOAD_CMD_RE.test(line)) return undefined;
+  for (const m of line.matchAll(HTTP_URL_RE)) {
+    const host = m[2]!.toLowerCase();
+    if (host.includes(".") && !LOCAL_HOST_RE.test(host)) return host;
+  }
+  return undefined;
+}
+
+function publicIpIn(line: string): string | undefined {
+  for (const m of line.matchAll(IP_URL_RE)) if (!NON_PUBLIC_IP_RE.test(m[1]!)) return m[1];
+  return undefined;
+}
+
+function encodedIn(line: string, path: string): string | undefined {
+  if (DECODE_RUN_RE.test(line)) return "decode-then-run code";
+  if (DATA_FILE_RE.test(path) || DATA_URI_RE.test(line)) return undefined;
+  const blob = LONG_BASE64_RE.exec(line)?.[0];
+  if (blob && /\d/.test(blob) && /[a-z]/.test(blob) && /[A-Z]/.test(blob)) return `a ${blob.length}-character base64 string`;
+  return undefined;
+}
 const INLINE_EXEC_RE = /(^|\s)!`[^`\n]+`/;
 const SECRET_PATTERNS: [RegExp, string][] = [
   [/\bAKIA[0-9A-Z]{16}\b/, "an AWS access key"],
@@ -97,7 +197,7 @@ function parseSkill(text: string): Parsed {
   const fmLines = lines.slice(1, end);
   const body = lines.slice(end + 1).join("\n");
   try {
-    const data = parseYaml(fmLines.join("\n"));
+    const data = parseYaml(fmLines.join("\n"), { logLevel: "error" });
     if (data !== null && (typeof data !== "object" || Array.isArray(data))) {
       return { frontmatter: {}, yamlError: "Frontmatter is not a key: value map.", fmLines, body, bodyStartLine: end + 2 };
     }
@@ -275,7 +375,7 @@ export function validateSkill(input: SkillInput): Report {
     run("broad-allowed-tools", () => {
       const raw = fm["allowed-tools"];
       const list = Array.isArray(raw) ? raw.map(str) : str(raw).split(/[\s,]+(?![^(]*\))/).filter(Boolean);
-      const broad = list.find((t) => t === "*" || t === "Bash" || /^Bash\(\s*\*\s*\)$/.test(t) || /^Bash\(\s*\*:\*\s*\)$/.test(t));
+      const broad = list.find((t) => t === "*" || /^(Bash|Shell)$/i.test(t) || /^(Bash|Shell)\(\s*\*\s*\)$/i.test(t) || /^(Bash|Shell)\(\s*\*?:\*\s*\)$/i.test(t));
       if (broad) add("broad-allowed-tools", `allowed-tools pre-approves \`${broad}\``, fmLine("allowed-tools"));
     });
   }
@@ -296,7 +396,7 @@ export function validateSkill(input: SkillInput): Report {
     else if (bodyWords < 3) add("body-empty", `Body has only ${plural(bodyWords, "word")}, no instructions`, parsed.bodyStartLine);
   });
   if (!bodyTrim) {
-    na("body-too-long", "body-too-many-tokens", "long-body-no-references", "no-steps", "no-examples", "shouty-directives", "windows-paths", "time-sensitive", "remote-exec", "shell-injection");
+    na("body-too-long", "body-too-many-tokens", "long-body-no-references", "no-steps", "no-examples", "shouty-directives", "windows-paths", "time-sensitive", "shell-injection");
   } else {
     run("body-too-long", () => {
       if (bodyLines > 500) add("body-too-long", `Body is ${bodyLines} lines, over the 500-line limit`);
@@ -337,10 +437,6 @@ export function validateSkill(input: SkillInput): Report {
     run("time-sensitive", () => {
       const hit = firstMatch(TIME_RE);
       if (hit) add("time-sensitive", `Wording that will go out of date: "${TIME_RE.exec(hit.text)?.[0]}"`, hit.line);
-    });
-    run("remote-exec", () => {
-      const hit = rows.find((r) => REMOTE_EXEC_RE.test(r.text));
-      if (hit) add("remote-exec", `Pipes a download into a shell: "${hit.text.trim().slice(0, 70)}"`, hit.line);
     });
     run("shell-injection", () => {
       const hit = rows.find((r) => /^\s*```!\s*$/.test(r.text)) ?? prose.find((r) => INLINE_EXEC_RE.test(r.text));
@@ -440,8 +536,113 @@ export function validateSkill(input: SkillInput): Report {
     });
   }
 
+  // Security content checks read SKILL.md and the bundled text files the skill's author wrote. Test data,
+  // tests and bundled third-party or built code hold samples and other people's code, so they are skipped.
+  const texts: { path: string; lines: string[]; fixture: boolean }[] = [
+    { path: "SKILL.md", lines: input.skillMd.replace(/\r\n/g, "\n").split("\n"), fixture: false },
+    ...Object.entries(input.files ?? {}).map(([path, text]) => ({
+      path,
+      lines: text.replace(/\r\n/g, "\n").split("\n"),
+      fixture: FIXTURE_DIR_RE.test(path) || NOT_SKILL_CODE_RE.test(path),
+    })),
+  ];
+  const where = (path: string, line: number) => (path === "SKILL.md" ? "" : ` in \`${path}\`, line ${line}`);
+  /** First line in the scanned files where `test` returns something; SKILL.md first. */
+  const scan = <T,>(test: (line: string, i: number, path: string) => T | undefined, withFixtures = false) => {
+    for (const { path, lines, fixture } of texts) {
+      if (fixture && !withFixtures) continue;
+      for (let i = 0; i < lines.length; i++) {
+        const value = test(lines[i]!, i, path);
+        if (value !== undefined && value !== false) return { path, line: i + 1, value, text: lines[i]! };
+      }
+    }
+    return undefined;
+  };
+  const snippet = (t: string, n = 70) => t.trim().slice(0, n);
+  const lineFor = (hit: { path: string; line: number }) => (hit.path === "SKILL.md" ? hit.line : undefined);
+
+  run("hidden-characters", () => {
+    const hit = scan((l, _i, path) => {
+      const found = hiddenIn(l, path);
+      return found.length ? found : undefined;
+    });
+    if (hit) {
+      const kinds = [...new Set(hit.value)].slice(0, 3).join(", ");
+      add("hidden-characters", `${plural(hit.value.length, "hidden character")} (${kinds})${where(hit.path, hit.line)}`, lineFor(hit));
+    }
+  });
+  if (fm && !parsed.yamlError) {
+    run("unsafe-yaml-tag", () => {
+      const i = parsed.fmLines.findIndex((l) => UNSAFE_YAML_TAG_RE.test(l));
+      if (i !== -1) add("unsafe-yaml-tag", `Frontmatter uses \`${UNSAFE_YAML_TAG_RE.exec(parsed.fmLines[i]!)![0]}\``, i + 2);
+    });
+    run("skill-hooks", () => {
+      if (fm.hooks !== undefined && fm.hooks !== null) add("skill-hooks", getRule("skill-hooks").problem, fmLine("hooks"));
+    });
+  }
+  run("remote-exec", () => {
+    const hit = scan((l) => REMOTE_EXEC_RE.test(l));
+    if (hit) add("remote-exec", `Pipes a download into a shell: "${snippet(hit.text)}"${where(hit.path, hit.line)}`, lineFor(hit));
+  });
+  run("instruction-manipulation", () => {
+    const hit = scan((l) => manipulationIn(l));
+    if (hit) add("instruction-manipulation", `Tells the agent: "${hit.value}"${where(hit.path, hit.line)}`, lineFor(hit));
+  });
+  run("permission-bypass", () => {
+    const isolated = new Set(texts.filter((t) => t.lines.some((l) => ISOLATED_RE.test(l))).map((t) => t.path));
+    const hit = scan((l, _i, path) => (!isolated.has(path) && BYPASS_USE_RE.test(l) ? BYPASS_RE.exec(l)?.[0].replace(/^["'`\s]+/, "") : undefined));
+    if (hit) add("permission-bypass", `Turns off permission prompts with \`${hit.value}\`${where(hit.path, hit.line)}`, lineFor(hit));
+  });
+  const credential = scan((l) => CREDENTIAL_FILE_RE.exec(l)?.[0].trim());
+  const network = scan((l) => NETWORK_RE.exec(l)?.[0].trim());
+  run("secrets-and-network", () => {
+    // Both in the same file, so a big repo's unrelated README and script don't add up to a finding.
+    for (const t of texts) {
+      if (t.fixture) continue;
+      const at = t.lines.findIndex((l) => SECRET_FILE_RE.test(l));
+      const net = at === -1 ? undefined : t.lines.map((l) => NETWORK_RE.exec(l)?.[0].trim()).find(Boolean);
+      if (net) {
+        add("secrets-and-network", `Reads \`${SECRET_FILE_RE.exec(t.lines[at]!)![0].trim()}\`${where(t.path, at + 1)} and calls the network with \`${net}\``, t.path === "SKILL.md" ? at + 1 : undefined);
+        return;
+      }
+    }
+  });
+  run("credential-files", () => {
+    if (credential) add("credential-files", `Names the credential file \`${credential.value}\`${where(credential.path, credential.line)}`, lineFor(credential));
+  });
+  run("encoded-payload", () => {
+    const hit = scan((l, _i, path) => encodedIn(l, path));
+    if (hit) add("encoded-payload", `Contains ${hit.value}${where(hit.path, hit.line)}`, lineFor(hit));
+  });
+  run("plain-http-download", () => {
+    const hit = scan((l) => plainHttpHost(l));
+    if (hit) add("plain-http-download", `Downloads from http://${hit.value} without HTTPS${where(hit.path, hit.line)}`, lineFor(hit));
+  });
+  run("system-changes", () => {
+    const hit = scan((l) => SYSTEM_CHANGE_RE.exec(l)?.[0].trim());
+    if (hit) add("system-changes", `Changes the system: "${snippet(hit.text)}"${where(hit.path, hit.line)}`, lineFor(hit));
+  });
+  run("mutable-download", () => {
+    const hit = scan((l) => (DOWNLOAD_CMD_RE.test(l) ? MUTABLE_URL_RE.exec(l)?.[0] : undefined));
+    if (hit) add("mutable-download", `Downloads from a URL that changes: ${snippet(hit.value, 90)}${where(hit.path, hit.line)}`, lineFor(hit));
+  });
+  run("hidden-link", () => {
+    const hit = scan((l) => SHORTENER_RE.exec(l)?.[0] ?? publicIpIn(l));
+    if (hit) add("hidden-link", `Link hides its destination: ${snippet(hit.value, 60)}${where(hit.path, hit.line)}`, lineFor(hit));
+  });
+  run("network-calls", () => {
+    if (network) add("network-calls", `Calls the network with \`${network.value}\`${where(network.path, network.line)}`, lineFor(network));
+  });
+  if (input.files !== undefined) {
+    run("binary-files", () => {
+      const bins = Object.keys(input.files!).filter((p) => BINARY_EXT_RE.test(p));
+      if (bins.length) add("binary-files", `Ships ${plural(bins.length, "binary file")}: ${bins.slice(0, 3).map((b) => `\`${b}\``).join(", ")}`);
+    });
+  }
+
   const failed = new Set(findings.map((f) => f.ruleId));
   const passed = RULES.filter((r) => ran.has(r.id) && !failed.has(r.id)).map((r) => r.id);
+  const noted = RULES.filter((r) => r.severity === "note" && failed.has(r.id)).map((r) => r.id);
   const skipped = RULES.filter((r) => r.needsFolder && !hasFolder).map((r) => r.id);
   const left = RULES.filter((r) => !ran.has(r.id) && !skipped.includes(r.id) && !notApplicable.has(r.id)).map((r) => r.id);
   // Without a readable frontmatter block the rules that read its fields can't run, and no agent can load
@@ -461,6 +662,7 @@ export function validateSkill(input: SkillInput): Report {
     skipped,
     blocked,
     notApplicable: notApplicableIds,
+    noted,
     score,
     grade,
     areas: scoreAreas(findings, passed, { notApplicable: notApplicableIds, frontmatterBroken }),
@@ -474,7 +676,7 @@ export function validateSkill(input: SkillInput): Report {
   };
 }
 
-const order = (s: Finding["severity"]) => (s === "error" ? 0 : s === "warning" ? 1 : 2);
+const order = (s: Finding["severity"]) => ({ error: 0, warning: 1, info: 2, note: 3 })[s];
 
 /** Overall score: 100 minus a penalty for each failing rule, counted once per rule. */
 export function scoreFindings(findings: Pick<Finding, "ruleId" | "severity">[]): { score: number; grade: Grade } {
@@ -493,7 +695,8 @@ export function scoreAreas(
 ): AreaScore[] {
   const areaOf = (id: string) => RULES_BY_ID[id]?.category;
   return AREAS.map(({ id, label }) => {
-    const own = findings.filter((f) => areaOf(f.ruleId) === id);
+    // Notes cost nothing and are neither passed nor failed.
+    const own = findings.filter((f) => areaOf(f.ruleId) === id && f.severity !== "note");
     const failed = new Set(own.map((f) => f.ruleId)).size;
     const passedHere = passed.filter((r) => areaOf(r) === id).length;
     const total = passedHere + failed;
@@ -540,11 +743,12 @@ export function reportToMarkdown(report: Report, title = report.name ?? "SKILL.m
     `Body: ${plural(report.stats.bodyLines, "line")}, about ${plural(report.stats.bodyTokens, "token")}. Description: ${plural(report.stats.descriptionChars, "character")}.`,
     "",
   );
-  if (report.findings.length === 0) lines.push("No findings.");
-  for (const severity of ["error", "warning", "info"] as const) {
+  if (!report.findings.some((f) => f.severity !== "note")) lines.push("No findings.", "");
+  const headings = { error: "Errors", warning: "Warnings", info: "Suggestions", note: "Notes to review (no points off)" } as const;
+  for (const severity of ["error", "warning", "info", "note"] as const) {
     const group = report.findings.filter((f) => f.severity === severity);
     if (!group.length) continue;
-    lines.push(`## ${severity === "error" ? "Errors" : severity === "warning" ? "Warnings" : "Suggestions"}`, "");
+    lines.push(`## ${headings[severity]}`, "");
     for (const f of group) {
       const rule = getRule(f.ruleId);
       lines.push(

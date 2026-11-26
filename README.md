@@ -12,7 +12,7 @@ Website: **[skillland.io](https://skillland.io)**. Check a skill in the browser,
 
 Lints agent skills (`SKILL.md` folders) for Claude Code, Codex, Cursor and any other agent that follows the [Agent Skills specification](https://agentskills.io/specification).
 
-Every rule quotes, word for word, the sentence of official guidance it relies on: the spec, Anthropic's and Claude Code's docs, OpenAI's and Cursor's docs, and the validation scripts Anthropic and OpenAI ship with their skill creators. Where a rule needs a number the sources leave open, such as a length threshold, the rule says so in `ourCall`.
+Every rule quotes, word for word, the sentence of official guidance it relies on: the spec, Anthropic's and Claude Code's docs (including Anthropic's guide to vetting skills for enterprise use), OpenAI's and Cursor's docs, the validation scripts Anthropic and OpenAI ship with their skill creators, and the OWASP Agentic Skills Top 10. Where a rule needs a number the sources leave open, such as a length threshold, the rule says so in `ourCall`.
 
 The same rules score the public skills on [skillland.io](https://skillland.io). Each rule has a page at [skillland.io/validate/rules](https://skillland.io/validate/rules).
 
@@ -64,13 +64,13 @@ It has one dependency, [`yaml`](https://www.npmjs.com/package/yaml), and runs in
 
 ## Scoring
 
-A skill starts at 100. Each failing rule costs 25 points for an error, 8 for a warning and 2 for a suggestion, once per rule however often it fails. Grades: A from 90, B from 80, C from 70, D from 60, F below. One error on its own gives 75, a C.
+A skill starts at 100. Each failing rule costs 25 points for an error, 8 for a warning and 2 for a suggestion, once per rule however often it fails. A note, such as "calls the network", costs nothing: it points at lines to review, not at a fault. Grades: A from 90, B from 80, C from 70, D from 60, F below. One error on its own gives 75, a C.
 
 Each of the four areas (Specification, Description, Structure and content, Security) also gets a grade, worked out the same way from that area's rules only. An error caps its own area at 59, so the area that has the problem shows F.
 
 The one cap on the overall score: when the frontmatter block is missing or isn't valid YAML, no agent can load the skill and most checks can't run, so the score is capped at 59 (F). Only Specification is graded then; the other areas have `graded: false` and their findings are still listed.
 
-A check with nothing to look at neither passes nor fails. It goes in `report.notApplicable`: the step and example checks on a body of 15 lines or fewer, the body checks on an empty body, the description checks with no description. Every rule is in exactly one of the findings, `passed`, `notApplicable`, `skipped` (needs the folder) or `blocked` (needs readable frontmatter).
+A check with nothing to look at neither passes nor fails. It goes in `report.notApplicable`: the step and example checks on a body of 15 lines or fewer, the body checks on an empty body, the description checks with no description. A note rule that found something goes in `report.noted` and counts as neither passed nor failed. Every rule is in exactly one of the findings, `passed`, `notApplicable`, `noted`, `skipped` (needs the folder) or `blocked` (needs readable frontmatter).
 
 The formula is Skillland's own; no vendor publishes one. It may change between minor versions, which the [changelog](CHANGELOG.md) will say.
 
