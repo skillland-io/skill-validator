@@ -256,7 +256,7 @@ describe("scoring", () => {
     expect(structure.notApplicable).toBe(3);
     expect(structure.total).toBe(structure.passed + structure.failed);
     const empty = validateSkill({ skillMd: head });
-    expect(empty.notApplicable).toEqual(expect.arrayContaining(["body-too-long", "remote-exec"]));
+    expect(empty.notApplicable).toEqual(expect.arrayContaining(["body-too-long", "shell-injection"]));
     expect(empty.blocked).toEqual([]);
     expect(validateSkill({ skillMd: GOOD }).notApplicable).not.toContain("body-too-long");
   });

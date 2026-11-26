@@ -2,7 +2,7 @@ import type { RuleSource } from "./types";
 
 /**
  * Every source a rule cites, with the sentence it relies on, copied word for word from the page.
- * Checked against the live pages on 2026-11-20. When a page changes, update the quote here.
+ * Checked against the live pages on 2026-11-20; security sources added 2026-11-26. When a page changes, update the quote here.
  */
 const SPEC = "https://agentskills.io/specification";
 const AS_SCRIPTS = "https://agentskills.io/skill-creation/using-scripts";
@@ -10,6 +10,8 @@ const OVERVIEW = "https://platform.claude.com/docs/en/agents-and-tools/agent-ski
 const BEST = "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices";
 const CC = "https://code.claude.com/docs/en/skills";
 const CODEX = "https://learn.chatgpt.com/docs/build-skills";
+const ENTERPRISE = "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/enterprise";
+const OWASP_AST = "https://github.com/OWASP/www-project-agentic-skills-top-10/blob/main";
 const CURSOR = "https://cursor.com/docs/skills";
 const ANTHROPIC_CREATOR = "https://github.com/anthropics/skills/blob/main/skills/skill-creator";
 const OPENAI_CREATOR = "https://github.com/openai/skills/blob/main/skills/.system/skill-creator";
@@ -113,6 +115,96 @@ export const S = {
     "Anthropic: Agent Skills overview, security considerations",
     `${OVERVIEW}#security-considerations`,
     "External sources are risky: Skills that fetch data from external URLs pose particular risk, as fetched content might contain malicious instructions.",
+  ),
+  overviewToolMisuse: src(
+    "Anthropic: Agent Skills overview, security considerations",
+    `${OVERVIEW}#security-considerations`,
+    "Tool misuse: Malicious Skills can call tools (file operations, bash commands, code execution) in harmful ways.",
+  ),
+  overviewDependencies: src(
+    "Anthropic: Agent Skills overview, security considerations",
+    `${OVERVIEW}#security-considerations`,
+    "Even trustworthy Skills can be compromised if their external dependencies change over time.",
+  ),
+  entManipulation: src(
+    "Anthropic: Skills for enterprise, risk tier assessment",
+    `${ENTERPRISE}#risk-tier-assessment`,
+    "Directives to ignore safety rules, hide actions from users, or alter Claude's behavior conditionally",
+  ),
+  entNetwork: src(
+    "Anthropic: Skills for enterprise, risk tier assessment",
+    `${ENTERPRISE}#risk-tier-assessment`,
+    "URLs, API endpoints, `fetch`, `curl`, or `requests` calls",
+  ),
+  entCodeExecution: src(
+    "Anthropic: Skills for enterprise, risk tier assessment",
+    `${ENTERPRISE}#risk-tier-assessment`,
+    "High: scripts run with full environment access",
+  ),
+  entFilesystem: src(
+    "Anthropic: Skills for enterprise, risk tier assessment",
+    `${ENTERPRISE}#risk-tier-assessment`,
+    "Paths outside the Skill directory, broad glob patterns, path traversal (`../`)",
+  ),
+  entAdversarial: src(
+    "Anthropic: Skills for enterprise, review checklist",
+    `${ENTERPRISE}#review-checklist`,
+    "Check for adversarial instructions. Look for directives that tell Claude to ignore safety rules, hide actions from users, exfiltrate data through responses, or alter behavior based on specific inputs.",
+  ),
+  entCombined: src(
+    "Anthropic: Skills for enterprise, review checklist",
+    `${ENTERPRISE}#review-checklist`,
+    "Consider the combined risk when a Skill uses both file-read and network tools together.",
+  ),
+  entExfiltration: src(
+    "Anthropic: Skills for enterprise, review checklist",
+    `${ENTERPRISE}#review-checklist`,
+    "Look for instructions that read sensitive data and then write, send, or encode it for external transmission",
+  ),
+  entRedirects: src(
+    "Anthropic: Skills for enterprise, review checklist",
+    `${ENTERPRISE}#review-checklist`,
+    "Confirm redirect destinations. If the Skill references external URLs, verify they point to expected domains.",
+  ),
+  entScanning: src(
+    "Anthropic: Skills for enterprise, skill content scanning",
+    `${ENTERPRISE}#skill-content-scanning`,
+    "These signs include hidden code execution, transfer of your data to an outside service, and instructions that tamper with Claude's safeguards.",
+  ),
+  ccHooks: src(
+    "Claude Code: hooks in skills and agents",
+    "https://code.claude.com/docs/en/hooks#hooks-in-skills-and-agents",
+    "Frontmatter hooks in a project skill follow the same … so they can run under -p in a folder you haven't trusted.",
+  ),
+  ccHooksField: src(
+    "Claude Code: frontmatter reference",
+    `${CC}#frontmatter-reference`,
+    "Hooks that Claude Code registers when the skill is invoked and keeps running for the rest of the session.",
+  ),
+  ccBypass: src(
+    "Claude Code: permission modes",
+    "https://code.claude.com/docs/en/permission-modes#skip-all-checks-with-bypasspermissions-mode",
+    "`bypassPermissions` mode disables permission prompts and safety checks so tool calls execute immediately … Isolated containers and VMs only",
+  ),
+  owaspHidden: src(
+    "OWASP Agentic Skills Top 10: AST04 Insecure Metadata",
+    `${OWASP_AST}/ast04.md`,
+    "Apply static analysis to all metadata fields and `SKILL.md` prose at publish time: flag suspicious patterns in general, and specifically ASCII smuggling, base64 payloads, and zero-width characters invisible to human reviewers.",
+  ),
+  owaspYamlTags: src(
+    "OWASP Agentic Skills Top 10: AST04 Insecure Metadata",
+    `${OWASP_AST}/ast04.md`,
+    "Use safe parsers by default — disable dangerous tags (`!!python/object`, `!!python/apply`; `yaml.load` → `yaml.safe_load`)",
+  ),
+  owaspHttp: src(
+    "OWASP Agentic Skills Top 10: AST01 Malicious Skills",
+    `${OWASP_AST}/ast01.md`,
+    "Instructions to download from non-HTTPS URLs",
+  ),
+  owaspPersistence: src(
+    "OWASP Agentic Skills Top 10: AST01 Malicious Skills",
+    `${OWASP_AST}/ast01.md`,
+    "Check for persistence mechanisms (SOUL.md, MEMORY.md modifications)",
   ),
   bestWhatWhen: src(
     "Anthropic: skill authoring best practices, writing effective descriptions",

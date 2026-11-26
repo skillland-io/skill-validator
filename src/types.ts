@@ -1,4 +1,5 @@
-export type Severity = "error" | "warning" | "info";
+/** `note` is a fact to review, not a fault: it costs no points and counts as neither passed nor failed. */
+export type Severity = "error" | "warning" | "info" | "note";
 
 export type RuleCategory = "spec" | "description" | "structure" | "security";
 
@@ -68,7 +69,7 @@ export interface AreaScore {
   grade: Grade;
   /** Rules in this area that ran and found nothing. */
   passed: number;
-  /** Rules in this area with at least one finding. */
+  /** Rules in this area with at least one finding, not counting notes. */
   failed: number;
   /** passed + failed: the rules in this area that ran. 0 means the area wasn't checked. */
   total: number;
@@ -96,6 +97,8 @@ export interface Report {
    * of 15 lines or fewer, body checks on an empty body, description checks with no description.
    */
   notApplicable: string[];
+  /** Note rules that found something to review, such as network calls. Their findings cost no points. */
+  noted: string[];
   /** 0-100 overall: 100 minus a penalty per failing rule. */
   score: number;
   grade: Grade;
