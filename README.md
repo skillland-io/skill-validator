@@ -37,6 +37,16 @@ To check skills on every pull request:
 - run: npx -p @skillland/validator skillland check skills --min-score 80
 ```
 
+## From your agent
+
+[skillland-io/skills](https://github.com/skillland-io/skills) has three agent skills for Claude Code, Codex and Cursor that run this CLI: `skillland-validate` reports the findings, `skillland-fix` edits the skill and checks again until it scores A, and `skillland-build` writes a new skill and checks it.
+
+```bash
+npx skills add skillland-io/skills
+```
+
+More on [skillland.io/tools/skills](https://skillland.io/tools/skills).
+
 ## Library
 
 ```bash
