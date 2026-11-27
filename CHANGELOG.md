@@ -6,7 +6,7 @@ Every release of `@skillland/validator`, newest first, with its release date. A 
 
 No scoring change. New CLI options for CI.
 
-- `--format github` prints a GitHub Actions annotation for each finding, so it shows on its line of `SKILL.md` in the pull request, with a link to the rule page. When `GITHUB_STEP_SUMMARY` is set it also writes a job summary: a table with each skill's score and area grades, then the findings. In a public repo each skill links to its full report on skillland.io/check.
+- `--format github` prints a GitHub Actions annotation for each finding, so it shows on its line of `SKILL.md` in the pull request, with a link to the rule page. When `GITHUB_STEP_SUMMARY` is set it also writes a job summary: a table with each skill's score and area grades, then the findings. In a public repo each skill links to its full report on skillland.io/check. When `GITHUB_OUTPUT` is set it writes the step outputs `score` and `grade` (of the lowest-scoring skill), `skills` and `failed`.
 - `--min-area-grade <grade>` fails the run when an area grades below the limit: `B` for every area, or `security=A` for one area (`spec`, `description`, `structure`, `security`). It can be given more than once.
 - `--format json` is the same as `--json`, which still works.
 

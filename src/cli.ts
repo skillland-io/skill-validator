@@ -13,6 +13,8 @@ for every SKILL.md below them.
 Options:
   --format <f>            text (default), json, or github: annotations on each finding's line
                           in the pull request, plus a job summary when GITHUB_STEP_SUMMARY is set
+                          and the outputs score, grade (lowest skill), skills and failed when
+                          GITHUB_OUTPUT is set
   --json                  Same as --format json
   --min-score <n>         Exit with code 1 when any skill scores below n (default: fail only on errors)
   --min-area-grade <g>    Exit with code 1 when an area grades below g. "B" applies to every area,
@@ -127,6 +129,11 @@ function main(argv: string[]): number {
       console.log(`${mark}  ${report.score} (${report.grade})  ${report.name ?? "SKILL.md"} (${p})`);
     }
     console.log(`${results.length} skill(s) checked against ${RULES.length} rules, ${failed.length} failed.`);
+    const outputFile = process.env.GITHUB_OUTPUT;
+    if (outputFile) {
+      const lowest = results.reduce((a, b) => (b.report.score < a.report.score ? b : a));
+      fs.appendFileSync(outputFile, `score=${lowest.report.score}\ngrade=${lowest.report.grade}\nskills=${results.length}\nfailed=${failed.length}\n`);
+    }
     const summaryFile = process.env.GITHUB_STEP_SUMMARY;
     if (summaryFile) {
       const repo = publicRepo();
