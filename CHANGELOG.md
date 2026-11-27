@@ -2,6 +2,14 @@
 
 Every release of `@skillland/validator`, newest first, with its release date. A version that changes scores says so on its first line. skillland.io shows this file at [skillland.io/validate/changelog](https://skillland.io/validate/changelog).
 
+## 0.8.0 (2026-11-27)
+
+No scoring change. New CLI options for CI.
+
+- `--format github` prints a GitHub Actions annotation for each finding, so it shows on its line of `SKILL.md` in the pull request, with a link to the rule page. When `GITHUB_STEP_SUMMARY` is set it also writes a job summary: a table with each skill's score and area grades, then the findings. In a public repo each skill links to its full report on skillland.io/check.
+- `--min-area-grade <grade>` fails the run when an area grades below the limit: `B` for every area, or `security=A` for one area (`spec`, `description`, `structure`, `security`). It can be given more than once.
+- `--format json` is the same as `--json`, which still works.
+
 ## 0.7.0 (2026-11-26)
 
 Scoring change: 1 new rule, so a few scores in the Skillland index go down when the site updates to this version.

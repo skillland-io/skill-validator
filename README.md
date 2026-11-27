@@ -26,15 +26,17 @@ npx -p @skillland/validator skillland check ./my-skill
 
 | Option | What it does |
 | --- | --- |
-| `--json` | Print the reports as JSON |
+| `--format <f>` | `text` (default), `json`, or `github`: an annotation on each finding's line in the pull request, plus a job summary |
+| `--json` | Same as `--format json` |
 | `--min-score <n>` | Also fail when a skill scores below `n` |
+| `--min-area-grade <g>` | Also fail when an area grades below `g`: `B` for every area, `security=A` for one. Repeatable |
 
-Exit codes: `0` every skill passes, `1` a skill has an error or scores below `--min-score`, `2` bad usage.
+Exit codes: `0` every skill passes, `1` a skill has an error or misses a `--min-score` or `--min-area-grade` limit, `2` bad usage.
 
 To check skills on every pull request:
 
 ```yaml
-- run: npx -p @skillland/validator skillland check skills --min-score 80
+- run: npx -p @skillland/validator@0.8.0 skillland check skills --format github --min-score 80 --min-area-grade security=A
 ```
 
 ## From your agent
