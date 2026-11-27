@@ -33,7 +33,17 @@ npx -p @skillland/validator skillland check ./my-skill
 
 Exit codes: `0` every skill passes, `1` a skill has an error or misses a `--min-score` or `--min-area-grade` limit, `2` bad usage.
 
-To check skills on every pull request:
+To check skills on every pull request, use the [Skillland GitHub Action](https://github.com/skillland-io/check-action) ([setup and inputs](https://skillland.io/tools/github-action)):
+
+```yaml
+- uses: skillland-io/check-action@v1
+  with:
+    path: skills
+    min-score: 80
+    min-area-grade: security=A
+```
+
+Or call the CLI in any CI:
 
 ```yaml
 - run: npx -p @skillland/validator@0.8.0 skillland check skills --format github --min-score 80 --min-area-grade security=A
